@@ -193,7 +193,9 @@ that tuning is a readable diff.
 - *audio*: concealment ratio; jitter buffer flushes; time stretching; track ended
   unexpectedly.
 - *device*: getUserMedia failures; low CPU performance; reload count.
-- *api*: API failures.
+- *api*: `add_ice_candidate_failure`, `set_local_description_failure` and
+  `set_remote_description_failure` — signaling/negotiation API call failures, which are
+  plain columns on `features_connection`, not a separate failures table.
 
 Implement roughly a dozen first — never connected, slow ICE, freezes, quality
 limitation, concealment and their neighbours explain most bad calls — then grow the
