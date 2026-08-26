@@ -44,3 +44,52 @@ export async function claimStaleDumps(
   );
   return rows.map((r) => r.dump_id);
 }
+
+export async function claimByDumpId(
+  pool: pg.Pool,
+  dumpId: number,
+  rulesVersion: string,
+  force: boolean
+): Promise<boolean> {
+  await pool.query(
+    `insert into dashboard_analysis (dump_id, rules_version, status, session_start, duration, rtcstats_user, rtcstats_conference)
+     select rss.id, $2, 'processing', rss.session_start,
+            extract(epoch from (rss.session_end - rss.session_start))::int,
+            rss.rtcstats_user, rss.rtcstats_conference
+     from "rtcstats-server" rss
+     where rss.id = $1
+     on conflict (dump_id) do nothing`,
+    [dumpId, rulesVersion]
+  );
+
+  const statusFilter = force ? 'true' : `status <> 'failed'`;
+  const { rowCount } = await pool.query(
+    `update dashboard_analysis set status = 'processing' where dump_id = $1 and ${statusFilter}`,
+    [dumpId]
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+export async function claimSince(
+  pool: pg.Pool,
+  sinceIso: string,
+  rulesVersion: string,
+  batchSize: number,
+  force: boolean
+): Promise<number[]> {
+  const statusFilter = force ? `status <> 'processing'` : `status not in ('processing', 'failed')`;
+  const { rows } = await pool.query(
+    `update dashboard_analysis
+     set status = 'processing'
+     where id in (
+       select id from dashboard_analysis
+       where session_start >= $1::timestamptz and rules_version <> $2 and ${statusFilter}
+       order by id
+       limit $3
+       for update skip locked
+     )
+     returning dump_id`,
+    [sinceIso, rulesVersion, batchSize]
+  );
+  return rows.map((r) => r.dump_id);
+}
