@@ -1,0 +1,16 @@
+{
+  "name": "@rtcstats-dashboard/analyzer",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/run.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "start": "node dist/run.js",
+    "backfill": "node dist/cli.js"
+  },
+  "dependencies": {
+    "@rtcstats-dashboard/rules": "*",
+    "pg": "^8.13.0"
+  }
+}
