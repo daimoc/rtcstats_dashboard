@@ -5,6 +5,8 @@ import { runMigrations } from '../scripts/migrate.mjs';
 
 const TEST_DATABASE_URL = 'postgresql://postgres:postgres@localhost:5433/dashboard_test';
 
+const BASE_SCHEMA = readFileSync('test/fixtures/000_base_schema.sql', 'utf8');
+
 describe('runMigrations', () => {
   let client: pg.Client;
 
@@ -12,7 +14,11 @@ describe('runMigrations', () => {
     client = new pg.Client({ connectionString: TEST_DATABASE_URL });
     await client.connect();
     await client.query('drop table if exists dashboard_observations, dashboard_analysis, dashboard_schema_migrations, features_track, features_connection, features_client, features_metadata, "rtcstats-server" cascade');
-    await client.query(readFileSync('test/fixtures/000_base_schema.sql', 'utf8'));
+    try {
+      await client.query(BASE_SCHEMA);
+    } catch (err: unknown) {
+      if (!(err instanceof Error) || !err.message.includes('duplicate key')) throw err;
+    }
   });
 
   afterAll(async () => {

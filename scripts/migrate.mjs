@@ -7,12 +7,16 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = path.join(__dirname, '..', 'migrations');
 
 export async function runMigrations(client) {
-  await client.query(`
-    create table if not exists dashboard_schema_migrations (
-      filename text primary key,
-      applied_at timestamptz not null default now()
-    )
-  `);
+  try {
+    await client.query(`
+      create table if not exists dashboard_schema_migrations (
+        filename text primary key,
+        applied_at timestamptz not null default now()
+      )
+    `);
+  } catch (err) {
+    if (!err.message.includes('duplicate key')) throw err;
+  }
 
   const { rows } = await client.query('select filename from dashboard_schema_migrations');
   const applied = new Set(rows.map((r) => r.filename));
@@ -30,6 +34,10 @@ export async function runMigrations(client) {
       console.log(`applied ${file}`);
     } catch (err) {
       await client.query('rollback');
+      if (err.message.includes('duplicate key')) {
+        applied.add(file);
+        continue;
+      }
       throw new Error(`migration ${file} failed: ${err.message}`, { cause: err });
     }
   }

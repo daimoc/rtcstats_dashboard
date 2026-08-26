@@ -1,8 +1,11 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import pg from 'pg';
 import { loadFeatures } from '../src/index.js';
+import { runMigrations } from '../../../scripts/migrate.mjs';
 
 const TEST_DATABASE_URL = 'postgresql://postgres:postgres@localhost:5433/dashboard_test';
+const BASE_SCHEMA = readFileSync('test/fixtures/000_base_schema.sql', 'utf8');
 
 describe('loadFeatures', () => {
   let pool: pg.Pool;
@@ -13,6 +16,21 @@ describe('loadFeatures', () => {
 
   afterAll(async () => {
     await pool.end();
+  });
+
+  beforeAll(async () => {
+    await pool.query(
+      'drop table if exists dashboard_observations, dashboard_analysis, dashboard_schema_migrations cascade'
+    );
+    await pool.query(
+      'drop table if exists features_track, features_connection, features_client, features_metadata, "rtcstats-server" cascade'
+    );
+    try {
+      await pool.query(BASE_SCHEMA);
+    } catch (err: unknown) {
+      if (!(err instanceof Error) || !err.message.includes('duplicate key')) throw err;
+    }
+    await runMigrations(pool);
   });
 
   beforeEach(async () => {
