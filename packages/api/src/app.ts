@@ -3,6 +3,8 @@ import fastifyCookie from '@fastify/cookie';
 import type pg from 'pg';
 import { LoginRateLimiter } from './auth.js';
 import { registerAuthRoutes } from './routes/auth.js';
+import { registerHealthRoute } from './routes/health.js';
+import { registerRulesRoute } from './routes/rules.js';
 
 export interface AppConfig {
   passwordHash: string;
@@ -12,6 +14,7 @@ export interface AppConfig {
 export interface AppDeps {
   pool: pg.Pool;
   config: AppConfig;
+  checkS3?: () => Promise<void>;
 }
 
 export function buildApp(deps: AppDeps): FastifyInstance {
@@ -20,6 +23,8 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   const rateLimiter = new LoginRateLimiter({ maxAttempts: 10, windowMs: 15 * 60 * 1000 });
   registerAuthRoutes(app, deps.config, rateLimiter);
+  registerHealthRoute(app, deps.pool, deps.checkS3);
+  registerRulesRoute(app);
 
   return app;
 }
