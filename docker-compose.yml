@@ -1,0 +1,61 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: rtcstats
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - miniodata:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+  dashboard-analyzer:
+    build:
+      context: .
+      dockerfile: packages/analyzer/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres/rtcstats
+      ANALYZER_POLL_INTERVAL_MS: "10000"
+      ANALYZER_BATCH_SIZE: "100"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  dashboard-api:
+    build:
+      context: .
+      dockerfile: packages/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres/rtcstats
+      SESSION_SECRET: ${SESSION_SECRET:-change-me-in-production}
+      PASSWORD_HASH: ${PASSWORD_HASH:-}
+      S3_ENDPOINT: http://minio:9000
+      S3_REGION: us-east-1
+      S3_ACCESS_KEY_ID: minioadmin
+      S3_SECRET_ACCESS_KEY: minioadmin
+      S3_BUCKET: rtcstats-dumps
+      PORT: "3000"
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  miniodata:
