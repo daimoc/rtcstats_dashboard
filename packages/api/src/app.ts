@@ -6,7 +6,7 @@ import { LoginRateLimiter } from './auth.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerHealthRoute } from './routes/health.js';
 import { registerRulesRoute } from './routes/rules.js';
-import { registerSessionDetailRoute, registerSessionsRoute } from './routes/sessions.js';
+import { registerDumpProxyRoute, registerSessionDetailRoute, registerSessionsRoute } from './routes/sessions.js';
 
 export interface AppConfig {
   passwordHash: string;
@@ -30,6 +30,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   registerRulesRoute(app);
   registerSessionsRoute(app, deps.pool, deps.config.sessionSecret);
   registerSessionDetailRoute(app, deps.pool, deps.s3, deps.config.sessionSecret);
+  registerDumpProxyRoute(app, deps.pool, deps.s3, deps.config.sessionSecret);
 
   return app;
 }

@@ -2,7 +2,7 @@ import type { S3Client } from '@aws-sdk/client-s3';
 import type { FastifyInstance } from 'fastify';
 import type pg from 'pg';
 import { loadFeatures } from '@rtcstats-dashboard/db-features';
-import { extractObjectKey, headDump } from '../s3.js';
+import { extractObjectKey, getDumpStream, headDump } from '../s3.js';
 import { requireAuth } from '../auth.js';
 
 export interface SessionFilters {
@@ -254,4 +254,36 @@ export function registerSessionDetailRoute(
       });
     }
   );
+}
+
+export function registerDumpProxyRoute(
+  app: FastifyInstance,
+  pool: pg.Pool,
+  s3: { client: S3Client; bucket: string } | undefined,
+  sessionSecret: string
+): void {
+  app.get<{ Params: { dumpId: string } }>('/api/sessions/:dumpId/dump', { preHandler: requireAuth(sessionSecret) }, async (request, reply) => {
+    if (!s3) {
+      reply.code(501).send({ error: 's3_not_configured' });
+      return;
+    }
+
+    const dumpId = Number(request.params.dumpId);
+    const blobUrlResult = await pool.query('select blob_url from "rtcstats-server" where id = $1', [dumpId]);
+    const blobUrl = blobUrlResult.rows[0]?.blob_url as string | undefined;
+
+    if (!blobUrl) {
+      reply.code(404).send({ error: 'blob_url_not_found' });
+      return;
+    }
+
+    const key = extractObjectKey(blobUrl, s3.bucket);
+    const { body, contentLength } = await getDumpStream(s3.client, s3.bucket, key);
+
+    reply.raw.writeHead(200, {
+      'Content-Type': 'application/gzip',
+      'Content-Length': contentLength ?? undefined
+    });
+    body.pipe(reply.raw);
+  });
 }
