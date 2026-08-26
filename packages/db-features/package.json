@@ -1,0 +1,15 @@
+{
+  "name": "@rtcstats-dashboard/db-features",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@rtcstats-dashboard/rules": "*",
+    "pg": "^8.13.0"
+  }
+}
