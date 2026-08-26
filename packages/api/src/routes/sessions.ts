@@ -1,5 +1,8 @@
+import type { S3Client } from '@aws-sdk/client-s3';
 import type { FastifyInstance } from 'fastify';
 import type pg from 'pg';
+import { loadFeatures } from '@rtcstats-dashboard/db-features';
+import { extractObjectKey, headDump } from '../s3.js';
 import { requireAuth } from '../auth.js';
 
 export interface SessionFilters {
@@ -170,4 +173,85 @@ export function registerSessionsRoute(app: FastifyInstance, pool: pg.Pool, sessi
     const result = await listSessions(pool, filters);
     reply.send(result);
   });
+}
+
+const SEVERITY_RANK: Record<string, number> = { critical: 0, warning: 1, info: 2 };
+
+export function registerSessionDetailRoute(
+  app: FastifyInstance,
+  pool: pg.Pool,
+  s3: { client: S3Client; bucket: string } | undefined,
+  sessionSecret: string
+): void {
+  app.get<{ Params: { dumpId: string } }>(
+    '/api/sessions/:dumpId',
+    { preHandler: requireAuth(sessionSecret) },
+    async (request, reply) => {
+      const dumpId = Number(request.params.dumpId);
+
+      const analysisResult = await pool.query(
+        `select id, dump_id, rules_version, status, error, session_start, duration,
+                rtcstats_user, rtcstats_conference, experience_score, audio_score, video_score,
+                connectivity_score, worst_severity, observations_count, observation_types
+         from dashboard_analysis where dump_id = $1`,
+        [dumpId]
+      );
+      if (analysisResult.rows.length === 0) {
+        reply.code(404).send({ error: 'not_found' });
+        return;
+      }
+      const a = analysisResult.rows[0];
+
+      const observationsResult = await pool.query(
+        `select pid, type, severity, category, first_seen_at, observation
+         from dashboard_observations where analysis_id = $1`,
+        [a.id]
+      );
+      const observations = observationsResult.rows
+        .map((o) => ({
+          pid: o.pid, type: o.type, severity: o.severity, category: o.category,
+          firstSeenAt: o.first_seen_at, observation: o.observation
+        }))
+        .sort((x, y) => {
+          const rankDiff = SEVERITY_RANK[x.severity] - SEVERITY_RANK[y.severity];
+          if (rankDiff !== 0) return rankDiff;
+          return (x.firstSeenAt ?? 0) - (y.firstSeenAt ?? 0);
+        });
+
+      const features = await loadFeatures(pool, dumpId);
+
+      let dump: { sizeBytes: number | null; status: 'available' | 'missing' } = { sizeBytes: null, status: 'missing' };
+      if (s3) {
+        const blobUrlResult = await pool.query('select blob_url from "rtcstats-server" where id = $1', [dumpId]);
+        const blobUrl = blobUrlResult.rows[0]?.blob_url as string | undefined;
+        if (blobUrl) {
+          const key = extractObjectKey(blobUrl, s3.bucket);
+          const head = await headDump(s3.client, s3.bucket, key);
+          dump = head.exists ? { sizeBytes: head.sizeBytes, status: 'available' } : { sizeBytes: null, status: 'missing' };
+        }
+      }
+
+      reply.send({
+        analysis: {
+          dumpId: a.dump_id,
+          rulesVersion: a.rules_version,
+          status: a.status,
+          error: a.error,
+          sessionStart: a.session_start,
+          duration: a.duration,
+          rtcstatsUser: a.rtcstats_user,
+          rtcstatsConference: a.rtcstats_conference,
+          experienceScore: a.experience_score,
+          audioScore: a.audio_score,
+          videoScore: a.video_score,
+          connectivityScore: a.connectivity_score,
+          worstSeverity: a.worst_severity,
+          observationsCount: a.observations_count
+        },
+        observations,
+        features,
+        dump
+      });
+    }
+  );
 }
