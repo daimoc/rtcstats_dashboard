@@ -1,82 +1,71 @@
+import { readRTCStatsDump } from '@rtcstats/rtcstats-shared';
+import { buildConnectionSeries, type ConnectionSeries } from '../lib/dumpSeries.js';
+import { buildTimeline, type TimelineEvent } from '../lib/dumpTimeline.js';
+import type { DecodedDump } from '../lib/dumpTypes.js';
+
 const MAX_COMPRESSED_SIZE = 25 * 1024 * 1024; // 25 MB
 
-interface DecompressionWorkerMessage {
-  data: Uint8Array | Blob;
+export interface ParsedDump {
+  timeline: TimelineEvent[];
+  /** Chart data per dump-side connection id (`PC_0`, ...); only chartable ones appear. */
+  connections: Record<string, ConnectionSeries>;
+  /** Chartable connection ids in dump order, for the peer-connection selector. */
+  connectionIds: string[];
 }
 
-interface TooLargeMessage {
-  type: 'tooLarge';
-  size: number;
+export interface ParseDumpRequest {
+  data: Blob;
 }
 
-interface ParseResultMessage {
-  type: 'parsed';
-  data: unknown;
+export type ParseDumpMessage =
+  | { type: 'tooLarge'; size: number }
+  | { type: 'parsed'; result: ParsedDump }
+  | { type: 'error'; error: string };
+
+async function gunzip(blob: Blob): Promise<Blob> {
+  const stream = blob.stream().pipeThrough(new DecompressionStream('gzip'));
+  return new Response(stream).blob();
 }
 
-interface ErrorMessage {
-  type: 'error';
-  error: string;
-}
+/**
+ * Decode the dump and derive everything the UI needs, here in the worker.
+ *
+ * The decoded dump holds every `getStats` report in full — far larger than the 4 MB of
+ * JSON it came from — so deriving first and posting only the timeline and the chart
+ * series keeps a multi-megabyte structured clone off the main thread.
+ */
+async function parse(compressed: Blob): Promise<ParsedDump> {
+  const dump = (await readRTCStatsDump(await gunzip(compressed))) as unknown as DecodedDump;
 
-type WorkerMessage = TooLargeMessage | ParseResultMessage | ErrorMessage;
-
-async function decompressAndParse(blob: Blob): Promise<unknown> {
-  const stream = blob.stream();
-  const gzipStream = stream.pipeThrough(new DecompressionStream('gzip'));
-  const reader = gzipStream.getReader();
-  const chunks: Uint8Array[] = [];
-  let totalLength = 0;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (value) {
-      const chunk = new Uint8Array(value);
-      chunks.push(chunk);
-      totalLength += chunk.length;
-    }
+  const connections: Record<string, ConnectionSeries> = {};
+  const connectionIds: string[] = [];
+  for (const [pcId, trace] of Object.entries(dump?.peerConnections ?? {})) {
+    const series = buildConnectionSeries(trace);
+    if (!series) continue;
+    connections[pcId] = series;
+    connectionIds.push(pcId);
   }
 
-  const result = new Uint8Array(totalLength);
-  let offset = 0;
-  for (const chunk of chunks) {
-    result.set(chunk, offset);
-    offset += chunk.length;
-  }
-
-  const textDecoder = new TextDecoder('utf-8');
-  const jsonStr = textDecoder.decode(result);
-  return JSON.parse(jsonStr);
+  return { timeline: buildTimeline(dump), connections, connectionIds };
 }
 
-self.addEventListener('message', async (e: MessageEvent<DecompressionWorkerMessage>) => {
-  const { data } = e.data;
+function post(message: ParseDumpMessage): void {
+  self.postMessage(message);
+}
 
-  let blob: Blob;
-  let size: number;
+self.addEventListener('message', async (event: MessageEvent<ParseDumpRequest>) => {
+  const blob = event.data.data;
 
-  if (data instanceof Blob) {
-    blob = data;
-    size = data.size;
-  } else {
-    const buffer = data.buffer as ArrayBuffer;
-    blob = new Blob([buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)]);
-    size = data.byteLength;
-  }
-
-  // Check compressed size (from Blob) before decompression
+  // Guard on the compressed size: decompressing first is what would blow up memory.
   if (blob.size > MAX_COMPRESSED_SIZE) {
-    self.postMessage({ type: 'tooLarge' as const, size: blob.size } as WorkerMessage);
+    post({ type: 'tooLarge', size: blob.size });
     return;
   }
 
   try {
-    const parsed = await decompressAndParse(blob);
-    self.postMessage({ type: 'parsed' as const, data: parsed } as WorkerMessage);
+    post({ type: 'parsed', result: await parse(blob) });
   } catch (err) {
-    self.postMessage({ type: 'error' as const, error: err instanceof Error ? err.message : String(err) } as WorkerMessage);
+    // A truncated or malformed dump must not take the session page down with it.
+    post({ type: 'error', error: err instanceof Error ? err.message : String(err) });
   }
 });
-
-export default self;

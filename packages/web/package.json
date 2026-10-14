@@ -9,12 +9,15 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@rtcstats-dashboard/mos": "*",
+    "@rtcstats/rtcstats-shared": "^2.6.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-router": "^7.1.0",
+    "react-router-dom": "^7.1.0",
     "uplot": "^1.6.31"
   },
   "devDependencies": {
+    "@types/node": "^26.5.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.0",

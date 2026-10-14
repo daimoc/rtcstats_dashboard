@@ -1,5 +1,6 @@
 import type pg from 'pg';
 import type { AnalysisResult, Observation, Severity } from '@rtcstats-dashboard/rules';
+import type { CallMos } from './dumpMos.js';
 
 function worstSeverity(observations: Observation[]): Severity | null {
   if (observations.some((o) => o.severity === 'critical')) return 'critical';
@@ -18,7 +19,8 @@ export async function writeAnalysisResult(
   pool: pg.Pool,
   dumpId: number,
   rulesVersion: string,
-  result: AnalysisResult
+  result: AnalysisResult,
+  mos: CallMos | null = null
 ): Promise<void> {
   const client = await pool.connect();
   try {
@@ -27,7 +29,8 @@ export async function writeAnalysisResult(
       `update dashboard_analysis set
          rules_version = $2, status = $3, error = null,
          experience_score = $4, audio_score = $5, video_score = $6, connectivity_score = $7,
-         observation_types = $8, worst_severity = $9, observations_count = $10
+         observation_types = $8, worst_severity = $9, observations_count = $10,
+         audio_mos = $11, video_mos = $12
        where dump_id = $1
        returning id`,
       [
@@ -38,7 +41,9 @@ export async function writeAnalysisResult(
         result.scores?.connectivity ?? null,
         [...new Set(result.observations.map((o) => o.type))],
         worstSeverity(result.observations),
-        countsBySeverity(result.observations)
+        countsBySeverity(result.observations),
+        mos?.audio ?? null,
+        mos?.video ?? null
       ]
     );
     const analysisId = rows[0].id;
@@ -70,7 +75,8 @@ export async function writeFailure(
     `update dashboard_analysis set
        rules_version = $2, status = 'failed', error = $3,
        experience_score = null, audio_score = null, video_score = null, connectivity_score = null,
-       observation_types = '{}', worst_severity = null, observations_count = '{}'
+       observation_types = '{}', worst_severity = null, observations_count = '{}',
+       audio_mos = null, video_mos = null
      where dump_id = $1`,
     [dumpId, rulesVersion, errorMessage]
   );

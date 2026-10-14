@@ -2,8 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { LoginRateLimiter, SESSION_COOKIE_NAME, createSessionToken, verifyPassword, verifySessionToken } from '../auth.js';
 import type { AppConfig } from '../app.js';
 
-export function registerAuthRoutes(app: FastifyInstance, config: AppConfig, rateLimiter: LoginRateLimiter): void {
-  app.post<{ Body: { password?: string } }>('/api/login', async (request, reply) => {
+export function registerAuthRoutes(app: FastifyInstance, config: AppConfig, rateLimiter: LoginRateLimiter, prefix: string): void {
+  app.post<{ Body: { password?: string } }>(prefix + '/login', async (request, reply) => {
     const ip = request.ip;
     if (rateLimiter.isBlocked(ip)) {
       reply.code(429).send({ error: 'too_many_attempts' });
@@ -27,12 +27,12 @@ export function registerAuthRoutes(app: FastifyInstance, config: AppConfig, rate
     reply.send({ authenticated: true });
   });
 
-  app.post('/api/logout', async (_request, reply) => {
+  app.post(prefix + '/logout', async (_request, reply) => {
     reply.clearCookie(SESSION_COOKIE_NAME, { path: '/' });
     reply.send({ authenticated: false });
   });
 
-  app.get('/api/me', async (request, reply) => {
+  app.get(prefix + '/me', async (request, reply) => {
     const token = request.cookies[SESSION_COOKIE_NAME];
     const authenticated = !!token && verifySessionToken(token, config.sessionSecret);
     reply.send({ authenticated });

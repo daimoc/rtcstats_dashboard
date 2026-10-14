@@ -1,0 +1,93 @@
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.title {
+  font-size: 1.35rem;
+  letter-spacing: -0.02em;
+}
+
+.count {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.activeTypes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.activeLabel {
+  color: var(--text-faint);
+  font-size: 0.8rem;
+}
+
+.typeChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.35rem 0.15rem 0.6rem;
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: var(--radius-pill);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.typeChipRemove {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  color: inherit;
+  opacity: 0.7;
+}
+
+.typeChipRemove:hover {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  opacity: 1;
+}
+
+.footer {
+  display: grid;
+  justify-items: center;
+  padding: 1.25rem 0 0;
+}
+
+.loadMore {
+  height: 36px;
+  padding: 0 1.1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-weight: 500;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.loadMore:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+
+.loadMore:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
+
+.end {
+  color: var(--text-faint);
+  font-size: 0.8rem;
+}

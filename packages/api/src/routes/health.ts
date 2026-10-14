@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import type pg from 'pg';
 
-export function registerHealthRoute(app: FastifyInstance, pool: pg.Pool, checkS3?: () => Promise<void>): void {
-  app.get('/api/health', async (_request, reply) => {
+export function registerHealthRoute(app: FastifyInstance, pool: pg.Pool, checkS3?: () => Promise<void>, prefix: string = '/api'): void {
+  app.get(prefix + '/health', async (_request, reply) => {
     try {
       await pool.query('select 1');
       if (checkS3) await checkS3();

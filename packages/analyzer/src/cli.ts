@@ -1,7 +1,8 @@
 import pgModule from 'pg';
 import { RULES_VERSION } from '@rtcstats-dashboard/rules';
 import { claimByDumpId, claimSince, claimStaleDumps } from './claim.js';
-import { processDump } from './run.js';
+import type { DumpFetcher } from './dumpMos.js';
+import { dumpFetcherFromEnv, processDump } from './run.js';
 import type pg from 'pg';
 
 export interface CliOptions {
@@ -28,7 +29,11 @@ export function parseArgs(argv: string[], defaultRulesVersion: string): CliOptio
   return options;
 }
 
-export async function runBackfill(pool: pg.Pool, options: CliOptions): Promise<{ processed: number; failed: number }> {
+export async function runBackfill(
+  pool: pg.Pool,
+  options: CliOptions,
+  fetchDump?: DumpFetcher
+): Promise<{ processed: number; failed: number }> {
   let dumpIds: number[];
 
   if (options.dumpId != null) {
@@ -43,7 +48,7 @@ export async function runBackfill(pool: pg.Pool, options: CliOptions): Promise<{
   let processed = 0;
   let failed = 0;
   for (const dumpId of dumpIds) {
-    const outcome = await processDump(pool, dumpId, options.rulesVersion);
+    const outcome = await processDump(pool, dumpId, options.rulesVersion, fetchDump);
     if (outcome === 'ok') processed += 1;
     else failed += 1;
   }
@@ -54,7 +59,7 @@ async function main() {
   const options = parseArgs(process.argv.slice(2), RULES_VERSION);
   const pool = new pgModule.Pool({ connectionString: process.env.DATABASE_URL });
   try {
-    const result = await runBackfill(pool, options);
+    const result = await runBackfill(pool, options, dumpFetcherFromEnv(pool));
     console.log(JSON.stringify(result));
   } finally {
     await pool.end();

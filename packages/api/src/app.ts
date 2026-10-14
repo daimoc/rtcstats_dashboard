@@ -18,19 +18,21 @@ export interface AppDeps {
   config: AppConfig;
   checkS3?: () => Promise<void>;
   s3?: { client: S3Client; bucket: string };
+  apiPrefix?: string;
 }
 
 export function buildApp(deps: AppDeps): FastifyInstance {
   const app = Fastify({ logger: false });
   app.register(fastifyCookie);
 
+  const prefix = deps.apiPrefix ?? '/api';
   const rateLimiter = new LoginRateLimiter({ maxAttempts: 10, windowMs: 15 * 60 * 1000 });
-  registerAuthRoutes(app, deps.config, rateLimiter);
-  registerHealthRoute(app, deps.pool, deps.checkS3);
-  registerRulesRoute(app);
-  registerSessionsRoute(app, deps.pool, deps.config.sessionSecret);
-  registerSessionDetailRoute(app, deps.pool, deps.s3, deps.config.sessionSecret);
-  registerDumpProxyRoute(app, deps.pool, deps.s3, deps.config.sessionSecret);
+  registerAuthRoutes(app, deps.config, rateLimiter, prefix);
+  registerHealthRoute(app, deps.pool, deps.checkS3, prefix);
+  registerRulesRoute(app, prefix);
+  registerSessionsRoute(app, deps.pool, deps.config.sessionSecret, prefix);
+  registerSessionDetailRoute(app, deps.pool, deps.s3, deps.config.sessionSecret, prefix);
+  registerDumpProxyRoute(app, deps.pool, deps.s3, deps.config.sessionSecret, prefix);
 
   return app;
 }

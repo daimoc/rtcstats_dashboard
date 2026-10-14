@@ -1,11 +1,16 @@
+import { getBasePath } from './config.js';
+
 export interface SessionFilters {
   from?: string;
   to?: string;
+  q?: string;
   user?: string;
   conference?: string;
   types?: string[];
   severity?: string;
   maxScore?: number;
+  /** Calls whose audio or video MOS is at or below this value. */
+  maxMos?: number;
   sort: 'date' | 'score';
   cursor?: string;
   limit: number;
@@ -21,6 +26,10 @@ export interface SessionSummary {
   audioScore: number | null;
   videoScore: number | null;
   connectivityScore: number | null;
+  /** Mean received audio MOS (1–5); null when the dump was not scored. */
+  audioMos: number | null;
+  /** Mean received video MOS (1–5); null when the dump was not scored. */
+  videoMos: number | null;
   worstSeverity: string | null;
   observationsCount: Record<string, number>;
   topObservationTypes: string[];
@@ -35,11 +44,13 @@ export function listSessionsUrl(filters: SessionFilters): string {
   const params = new URLSearchParams();
   if (filters.from) params.set('from', filters.from);
   if (filters.to) params.set('to', filters.to);
+  if (filters.q) params.set('q', filters.q);
   if (filters.user) params.set('user', filters.user);
   if (filters.conference) params.set('conference', filters.conference);
   if (filters.types?.length) params.set('types', filters.types.join(','));
   if (filters.severity) params.set('severity', filters.severity);
   if (filters.maxScore != null) params.set('maxScore', String(filters.maxScore));
+  if (filters.maxMos != null) params.set('maxMos', String(filters.maxMos));
   if (filters.sort) params.set('sort', filters.sort);
   if (filters.cursor) params.set('cursor', filters.cursor);
   if (filters.limit != null) params.set('limit', String(filters.limit));
@@ -89,6 +100,8 @@ export interface SessionDetailResponse {
     audioScore: number | null;
     videoScore: number | null;
     connectivityScore: number | null;
+    audioMos: number | null;
+    videoMos: number | null;
     worstSeverity: string | null;
     observationsCount: Record<string, number>;
   };
@@ -105,8 +118,10 @@ export async function fetchSessionDetail(dumpId: number): Promise<SessionDetailR
   return apiFetch(`/api/sessions/${dumpId}`);
 }
 
-export function dumpDownloadUrl(dumpId: number): string {
-  return `/api/sessions/${dumpId}/dump`;
+export async function dumpDownloadUrl(dumpId: number): Promise<string> {
+  const base = await getBasePath();
+  const prefix = base === '/' ? '' : base;
+  return `${prefix}/api/sessions/${dumpId}/dump`;
 }
 
 interface MeResponse {
@@ -134,13 +149,13 @@ export async function logout(): Promise<void> {
 }
 
 async function apiFetch(url: string, init?: RequestInit): Promise<any> {
-  const res = await fetch(url, {
-    credentials: 'include',
-    ...init
+  const base = await getBasePath();
+  const target = base === '/' ? url : base + url;
+  return fetch(target, { credentials: 'include', ...init }).then(async (res) => {
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.error ?? `API error ${res.status}: ${res.statusText}`);
+    }
+    return res.json();
   });
-  if (!res.ok) {
-    const body = await res.json().catch(() => null);
-    throw new Error(body?.error ?? `API error ${res.status}: ${res.statusText}`);
-  }
-  return res.json();
 }

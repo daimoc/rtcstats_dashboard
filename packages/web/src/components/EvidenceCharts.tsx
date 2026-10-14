@@ -1,259 +1,188 @@
-import { useRef, useEffect, useCallback } from 'react';
-import type { SessionDetailResponse } from '../lib/api.js';
+import { useEffect, useRef, useState } from 'react';
 import uPlot from 'uplot';
+import 'uplot/dist/uPlot.min.css';
+import type { ChartSpec, ConnectionSeries } from '../lib/dumpSeries.js';
+import { describeDumpState, type DumpState } from '../lib/useDumpData.js';
+import styles from './EvidenceCharts.module.css';
 
-interface EvidenceChartsProps {
-  dumpData: SessionDetailResponse | null;
+export interface EvidenceChartsProps {
+  dump: DumpState;
+  /** Dump-side connection id (`PC_0`); charts follow the peer-connection selector. */
+  selectedPid: string;
 }
 
-type TimeSeriesPoint = [number, number];
-
-function buildTimeSeriesData(
-  features: SessionDetailResponse['features']
-): [number[], number[], number[], number[]] {
-  if (!features?.connections || features.connections.length === 0) {
-    return [[], [], [], []];
-  }
-
-  const connBitrates: number[][] = [];
-  const connPacketRates: number[][] = [];
-
-  for (let i = 0; i < features.connections.length; i++) {
-    connBitrates.push([]);
-    connPacketRates.push([]);
-  }
-
-  const featuresList: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(features)) {
-    if (key !== 'metadata' && key !== 'connections') {
-      featuresList[key] = value;
-    }
-  }
-
-  const featureNames = Object.keys(featuresList);
-
-  for (const conn of features.connections) {
-    const idx = features.connections.indexOf(conn);
-    const connInfo = conn as Record<string, unknown>;
-    const baseTime = connInfo.createdAt
-      ? (typeof connInfo.createdAt === 'number' ? connInfo.createdAt : 0)
-      : 0;
-
-    const tracks = conn.tracks || [];
-    for (const track of tracks) {
-      const t = track as Record<string, unknown>;
-      const trackTime = t.timestamp
-        ? (typeof t.timestamp === 'number' ? t.timestamp : 0)
-        : 0;
-      const relativeTime = trackTime - baseTime;
-      const bytesSent = t.bytesSent as number | undefined;
-      const bytesReceived = t.bytesReceived as number | undefined;
-      const packetsSent = t.packetsSent as number | undefined;
-      const packetsReceived = t.packetsReceived as number | undefined;
-
-      if (typeof relativeTime === 'number' && relativeTime >= 0) {
-        const bitrate = typeof bytesSent === 'number' && typeof bytesReceived === 'number'
-          ? (bytesSent + bytesReceived) * 8 / Math.max(relativeTime, 1) * 1000
-          : NaN;
-        connBitrates[idx].push(bitrate);
-
-        const pktRate = typeof packetsSent === 'number' && typeof packetsReceived === 'number'
-          ? (packetsSent + packetsReceived) / Math.max(relativeTime, 1) * 1000
-          : NaN;
-        connPacketRates[idx].push(pktRate);
-      }
-    }
-
-    for (const fname of featureNames) {
-      const fdata = featuresList[fname] as Record<string, unknown> | null | undefined;
-      if (!fdata) continue;
-
-      const entries = Object.entries(fdata) as [string, Record<string, unknown>][];
-      for (const [ts, f] of entries) {
-        const timestamp = Number(ts);
-        if (isNaN(timestamp) || timestamp < 0) continue;
-
-        const relativeTime = timestamp - baseTime;
-        if (relativeTime < 0) continue;
-
-        const fe = f as Record<string, unknown>;
-        const bytesVal = fe.bytes as number | undefined;
-        const packets = fe.packets as number | undefined;
-
-        if (typeof bytesVal === 'number' && typeof packets === 'number') {
-          connBitrates[idx].push(bytesVal * 8);
-          connPacketRates[idx].push(packets);
-        }
-      }
-    }
-  }
-
-  const bitrateData: TimeSeriesPoint[] = [];
-  const packetData: TimeSeriesPoint[] = [];
-
-  for (const series of connBitrates) {
-    for (let i = 0; i < series.length; i++) {
-      const t = i * 0.05;
-      const b = series[i];
-      if (!isNaN(b)) {
-        const bi = Math.floor(t * 20) * 20;
-        const existing = bitrateData.find(d => Math.abs(d[0] - bi) < 1);
-        if (existing) {
-          existing[1] += b;
-        } else {
-          bitrateData.push([bi, b]);
-        }
-      }
-    }
-  }
-
-  for (const series of connPacketRates) {
-    for (let i = 0; i < series.length; i++) {
-      const t = i * 0.05;
-      const p = series[i];
-      if (!isNaN(p)) {
-        const bi = Math.floor(t * 20) * 20;
-        const existing = packetData.find(d => Math.abs(d[0] - bi) < 1);
-        if (existing) {
-          existing[1] += p;
-        } else {
-          packetData.push([bi, p]);
-        }
-      }
-    }
-  }
-
-  bitrateData.sort((a, b) => a[0] - b[0]);
-  packetData.sort((a, b) => a[0] - b[0]);
-
-  const bitrateX = bitrateData.map(d => d[0]);
-  const bitrateY = bitrateData.map(d => d[1]);
-  const packetX = packetData.map(d => d[0]);
-  const packetY = packetData.map(d => d[1]);
-
-  return [bitrateX, bitrateY, packetX, packetY];
+interface ChartPalette {
+  series: string[];
+  grid: string;
+  axis: string;
 }
 
-export function EvidenceCharts({ dumpData }: EvidenceChartsProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<uPlot | null>(null);
+/**
+ * uPlot paints to a canvas, so it cannot inherit CSS. Read the current values of
+ * the design tokens instead, and re-read them whenever the theme changes.
+ */
+function readPalette(): ChartPalette {
+  const computed = getComputedStyle(document.documentElement);
+  const token = (name: string, fallback: string) => computed.getPropertyValue(name).trim() || fallback;
 
-  const renderCharts = useCallback(() => {
-    if (!containerRef.current) return;
+  return {
+    // Categorical tokens, never the status ones: a red line in a severity-coloured
+    // dashboard reads as a fault rather than as "inbound video".
+    series: [
+      token('--series-1', '#3987e5'),
+      token('--series-2', '#c98500'),
+      token('--series-3', '#d55181'),
+      token('--series-4', '#008300')
+    ],
+    grid: token('--border', '#262f3d'),
+    axis: token('--text-faint', '#6b7787')
+  };
+}
 
-    if (chartRef.current) {
-      chartRef.current.destroy();
-      chartRef.current = null;
-    }
+/** Keeps large counters (bits/s) readable on a narrow axis. */
+function formatCompact(value: number): string {
+  const abs = Math.abs(value);
+  if (abs >= 1e9) return `${(value / 1e9).toFixed(1)}G`;
+  if (abs >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
+  if (abs >= 1e3) return `${(value / 1e3).toFixed(0)}k`;
+  return String(Math.round(value * 100) / 100);
+}
 
-    if (!dumpData?.features?.connections || dumpData.features.connections.length === 0) {
-      const noDataEl = document.createElement('div');
-      noDataEl.className = 'evidence-charts-empty';
-      noDataEl.textContent = 'No connection data available for charting.';
-      noDataEl.style.cssText = 'padding: 2rem; text-align: center; color: #6b7280; font-style: italic;';
+const AXIS_FONT = '11px system-ui, sans-serif';
+/** Shared key so hovering one chart moves the cursor on all of them. */
+const SYNC_KEY = 'rtcstats-evidence';
 
-      while (containerRef.current.firstChild) {
-        containerRef.current.removeChild(containerRef.current.firstChild);
+function buildOptions(spec: ChartSpec, palette: ChartPalette, width: number): uPlot.Options {
+  return {
+    width,
+    height: 190,
+    padding: [8, 8, 0, 8],
+    legend: { show: true },
+    cursor: { sync: { key: SYNC_KEY }, y: false },
+    series: [
+      {},
+      ...spec.series.map((series) => ({
+        label: series.label,
+        stroke: palette.series[series.colorSlot % palette.series.length],
+        width: 2,
+        points: { show: false },
+        spanGaps: true
+      }))
+    ],
+    scales: {
+      x: { time: false },
+      // Always anchored at zero so magnitudes stay comparable, with a ceiling drawn from
+      // the data: uPlot's default would give an all-zero series a 0-100 axis, which reads
+      // as though 100 lost packets/s were the expected scale.
+      y: {
+        range: (_u: uPlot, _min: number, max: number): [number, number] =>
+          spec.range ?? [0, Number.isFinite(max) && max > 0 ? max * 1.08 : 1]
       }
-      containerRef.current.appendChild(noDataEl);
+    },
+    axes: [
+      {
+        scale: 'x',
+        size: 34,
+        label: 'Time (s)',
+        font: AXIS_FONT,
+        labelFont: AXIS_FONT,
+        stroke: palette.axis,
+        ticks: { show: false },
+        grid: { show: true, stroke: palette.grid }
+      },
+      {
+        scale: 'y',
+        size: 62,
+        label: spec.unit,
+        font: AXIS_FONT,
+        labelFont: AXIS_FONT,
+        stroke: palette.axis,
+        ticks: { show: true, size: 3, stroke: palette.grid },
+        grid: { show: true, stroke: palette.grid },
+        values: (_u: uPlot, splits: number[]) => splits.map(formatCompact)
+      }
+    ]
+  };
+}
+
+function Chart({ spec, x, themeVersion }: { spec: ChartSpec; x: number[]; themeVersion: number }) {
+  const host = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const node = host.current;
+    if (!node) return;
+
+    const data = [x, ...spec.series.map((s) => s.values)] as unknown as uPlot.AlignedData;
+
+    let chart: uPlot;
+    try {
+      chart = new uPlot(buildOptions(spec, readPalette(), node.clientWidth || 600), data, node);
+    } catch {
+      // A malformed dump should not take the rest of the page down with it.
       return;
     }
 
-    const [bitrateX, bitrateY] = buildTimeSeriesData(dumpData.features);
+    const resize = new ResizeObserver((entries) => {
+      const width = Math.floor(entries[0].contentRect.width);
+      if (width > 0) chart.setSize({ width, height: 190 });
+    });
+    resize.observe(node);
 
-    const seriesOptions: uPlot.Series[] = [
-      { show: true },
-      {
-        label: 'Bitrate',
-        scale: 'bits',
-        stroke: '#6366f1',
-        fill: '#6366f188',
-        width: 2,
-        points: { show: false },
-        spanGaps: false,
-      },
-    ];
-
-    const chartsDiv = document.createElement('div');
-    chartsDiv.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; width: 100%;';
-
-    const leftChart = document.createElement('div');
-    leftChart.className = 'evidence-chart';
-    leftChart.style.cssText = 'height: 300px; border: 1px solid #e5e7eb; border-radius: 6px;';
-
-    const rightChart = document.createElement('div');
-    rightChart.className = 'evidence-chart';
-    rightChart.style.cssText = 'height: 300px; border: 1px solid #e5e7eb; border-radius: 6px;';
-
-    chartsDiv.appendChild(leftChart);
-    chartsDiv.appendChild(rightChart);
-
-    while (containerRef.current.firstChild) {
-      containerRef.current.removeChild(containerRef.current.firstChild);
-    }
-    containerRef.current.appendChild(chartsDiv);
-
-    const dataSets: uPlot.AlignedData = [bitrateX, bitrateY];
-
-    const opts: uPlot.Options = {
-      width: 600,
-      height: 300,
-      padding: [8, 8, 24, 8],
-      legend: { show: true },
-      series: seriesOptions,
-      scales: {
-        x: { time: false },
-        bits: {
-          range: [0, null],
-        },
-      },
-      axes: [
-        {
-          scale: 'x',
-          size: 40,
-          label: 'Time (s)',
-          font: '11px sans-serif',
-          stroke: '#d1d5db',
-          ticks: { show: false },
-          grid: { show: true, stroke: '#f3f4f6' },
-        },
-        {
-          scale: 'bits',
-          size: 50,
-          label: 'Bitrate (bits/s)',
-          font: '11px sans-serif',
-          stroke: '#d1d5db',
-          ticks: { show: true, size: 3 },
-          grid: { show: true, stroke: '#f3f4f6' },
-        },
-      ],
-      hooks: {
-        init: [(u: uPlot) => {
-          const el = u.ctx?.canvas?.parentElement as HTMLElement;
-          if (el) {
-            el.style.width = '100%';
-            el.style.height = '100%';
-          }
-        }],
-      },
-    };
-
-    try {
-      chartRef.current = new uPlot(opts, dataSets, leftChart);
-    } catch {
-      // Gracefully handle chart init failure
-    }
-  }, [dumpData]);
-
-  useEffect(() => {
-    renderCharts();
     return () => {
-      if (chartRef.current) {
-        chartRef.current.destroy();
-        chartRef.current = null;
-      }
+      resize.disconnect();
+      chart.destroy();
     };
-  }, [renderCharts]);
+  }, [spec, x, themeVersion]);
 
-  return <div ref={containerRef} className="evidence-charts" />;
+  return (
+    <figure className={styles.figure}>
+      <figcaption className={styles.chartTitle}>{spec.title}</figcaption>
+      <div ref={host} className={styles.chart} />
+    </figure>
+  );
+}
+
+/**
+ * Time-series evidence for the selected peer connection, read from the raw dump.
+ *
+ * The `features_*` tree the API returns holds only per-connection aggregates, so there is
+ * nothing there to plot over time; every series here comes from the dump's `getStats`
+ * reports, decoded and differentiated in the parse worker.
+ */
+export function EvidenceCharts({ dump, selectedPid }: EvidenceChartsProps) {
+  const [themeVersion, setThemeVersion] = useState(0);
+
+  // Both the explicit toggle (data-theme) and the OS preference change colours.
+  useEffect(() => {
+    const bump = () => setThemeVersion((v) => v + 1);
+
+    const observer = new MutationObserver(bump);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+    const media = matchMedia('(prefers-color-scheme: light)');
+    media.addEventListener('change', bump);
+
+    return () => {
+      observer.disconnect();
+      media.removeEventListener('change', bump);
+    };
+  }, []);
+
+  const notice = describeDumpState(dump);
+  if (notice) return <p className={styles.empty}>{notice}</p>;
+
+  const connections = dump.status === 'ready' ? dump.result.connections : {};
+  const series: ConnectionSeries | undefined = connections[selectedPid];
+
+  if (!series) {
+    return <p className={styles.empty}>No stats were recorded for this peer connection.</p>;
+  }
+
+  return (
+    <div className={styles.wrap}>
+      {series.charts.map((spec) => (
+        <Chart key={`${selectedPid}-${spec.key}`} spec={spec} x={series.x} themeVersion={themeVersion} />
+      ))}
+    </div>
+  );
 }

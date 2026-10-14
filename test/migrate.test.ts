@@ -35,8 +35,11 @@ describe('runMigrations', () => {
 
   it('is idempotent on a second run', async () => {
     await runMigrations(client);
-    const { rows } = await client.query('select filename from dashboard_schema_migrations');
-    expect(rows).toHaveLength(1);
-    expect(rows[0].filename).toBe('0001_dashboard_tables.sql');
+    const { rows } = await client.query('select filename from dashboard_schema_migrations order by filename');
+    expect(rows.map((r) => r.filename)).toEqual([
+      '0001_dashboard_tables.sql',
+      '0002_session_search_index.sql',
+      '0003_call_mos.sql'
+    ]);
   });
 });

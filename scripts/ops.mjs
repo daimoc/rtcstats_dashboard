@@ -12,10 +12,23 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { randomBytes, scryptSync } from 'node:crypto';
 import pg from 'pg';
-import { runMigrations } from './scripts/migrate.mjs';
-import { createS3Client } from './packages/api/src/s3.js';
+import { S3Client, CreateBucketCommand } from '@aws-sdk/client-s3';
+import { runMigrations } from './migrate.mjs';
 
 const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5433/rtcstats';
+
+/**
+ * The upstream rtcstats tables may not exist yet on an external database.
+ * A missing table (42P01) is a warning, not a reason to abort startup.
+ */
+async function grant(client, sql, table) {
+  try {
+    await client.query(sql);
+  } catch (err) {
+    if (err.code !== '42P01') throw err;
+    console.warn(`skipped grant on missing table ${table}`);
+  }
+}
 
 async function createRoles(client) {
   const roles = [
@@ -39,12 +52,12 @@ async function createRoles(client) {
   ];
 
   for (const table of tables) {
-    await client.query(`grant select on ${table} to dashboard_reader`);
-    await client.query(`grant select on ${table} to dashboard_writer`);
+    await grant(client, `grant select on ${table} to dashboard_reader`, table);
+    await grant(client, `grant select on ${table} to dashboard_writer`, table);
   }
   for (const table of ['dashboard_analysis', 'dashboard_observations']) {
-    await client.query(`grant select, insert, update, delete on ${table} to dashboard_writer`);
-    await client.query(`grant usage, select on all sequences in schema public to dashboard_writer`);
+    await grant(client, `grant select, insert, update, delete on ${table} to dashboard_writer`, table);
+    await grant(client, `grant usage, select on all sequences in schema public to dashboard_writer`, table);
   }
   console.log('roles and grants applied');
 }
@@ -57,16 +70,17 @@ async function init() {
     await createRoles(client);
 
     if (process.env.S3_ENDPOINT) {
-      const s3 = createS3Client({
+      const s3 = new S3Client({
         endpoint: process.env.S3_ENDPOINT,
         region: process.env.S3_REGION ?? 'us-east-1',
-        accessKeyId: process.env.S3_ACCESS_KEY_ID ?? 'minioadmin',
-        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? 'minioadmin',
-        bucket: process.env.S3_BUCKET ?? 'rtcstats-dumps',
+        credentials: {
+          accessKeyId: process.env.S3_ACCESS_KEY_ID ?? 'minioadmin',
+          secretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? 'minioadmin'
+        },
         forcePathStyle: true
       });
       try {
-        await s3.send(new (await import('@aws-sdk/client-s3')).CreateBucketCommand({
+        await s3.send(new CreateBucketCommand({
           Bucket: process.env.S3_BUCKET ?? 'rtcstats-dumps'
         }));
         console.log('S3 bucket ensured');

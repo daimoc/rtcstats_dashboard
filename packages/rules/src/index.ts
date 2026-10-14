@@ -1,4 +1,6 @@
-export const RULES_VERSION = '1.0.0';
+// Bumped whenever stored results change shape or meaning, so the analyzer re-scores every
+// call. 1.1.0 added the audio/video MOS columns.
+export const RULES_VERSION = '1.1.0';
 
 export * from './types.js';
 export { analyze } from './analyze.js';

@@ -1,12 +1,17 @@
 FROM node:22-alpine AS build
 WORKDIR /app
-COPY package.json package-lock.json ./
+COPY package.json package-lock.json tsconfig.base.json ./
 COPY packages/rules/package.json packages/rules/package.json
 COPY packages/analyzer/package.json packages/analyzer/package.json
-RUN npm ci
+COPY packages/db-features/package.json packages/db-features/package.json
+COPY packages/mos/package.json packages/mos/package.json
+RUN npm ci && npm install --save-dev typescript @types/pg
 COPY packages/rules packages/rules
 COPY packages/analyzer packages/analyzer
-RUN npm run build --workspace packages/rules --workspace packages/analyzer
+COPY packages/db-features packages/db-features
+COPY packages/mos packages/mos
+RUN ./node_modules/.bin/tsc -p packages/rules/tsconfig.json && ./node_modules/.bin/tsc -p packages/db-features/tsconfig.json \
+ && ./node_modules/.bin/tsc -p packages/mos/tsconfig.json && ./node_modules/.bin/tsc -p packages/analyzer/tsconfig.json
 
 FROM node:22-alpine
 WORKDIR /app
@@ -15,6 +20,10 @@ COPY --from=build /app/packages/rules/dist packages/rules/dist
 COPY --from=build /app/packages/rules/package.json packages/rules/package.json
 COPY --from=build /app/packages/analyzer/dist packages/analyzer/dist
 COPY --from=build /app/packages/analyzer/package.json packages/analyzer/package.json
+COPY --from=build /app/packages/db-features/dist packages/db-features/dist
+COPY --from=build /app/packages/db-features/package.json packages/db-features/package.json
+COPY --from=build /app/packages/mos/dist packages/mos/dist
+COPY --from=build /app/packages/mos/package.json packages/mos/package.json
 COPY migrations migrations
 COPY scripts scripts
 CMD ["node", "packages/analyzer/dist/run.js"]

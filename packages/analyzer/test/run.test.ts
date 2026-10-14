@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import pg from 'pg';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { createPool } from '../src/db.js';
 import { getAnalysisLag, processDump, runOnce } from '../src/run.js';
 
@@ -69,5 +71,44 @@ describe('processDump / runOnce / getAnalysisLag', () => {
     const { rows } = await pool.query('select status, error from dashboard_analysis where dump_id = $1', [dumpId]);
     expect(rows[0].status).toBe('failed');
     expect(rows[0].error).toContain('features not found');
+  });
+
+  it('stores the call MOS computed from the raw dump', async () => {
+    const dumpId = await insertDumpWithFreezingVideo(pool);
+    const fixture = new Uint8Array(readFileSync(fileURLToPath(new URL('../../../test/fixtures/sample_30min.gz', import.meta.url))));
+    const fetched: number[] = [];
+
+    await runOnce(pool, 10, async (id) => {
+      fetched.push(id);
+      return fixture;
+    });
+
+    expect(fetched).toEqual([dumpId]);
+    const { rows } = await pool.query('select status, audio_mos, video_mos from dashboard_analysis where dump_id = $1', [dumpId]);
+    expect(rows[0].status).toBe('ok');
+    expect(rows[0].audio_mos).toBeGreaterThan(3.5);
+    expect(rows[0].audio_mos).toBeLessThanOrEqual(5);
+    expect(rows[0].video_mos).toBeGreaterThan(3.5);
+    expect(rows[0].video_mos).toBeLessThanOrEqual(5);
+  });
+
+  it('still analyzes the call when the dump cannot be scored', async () => {
+    const dumpId = await insertDumpWithFreezingVideo(pool);
+
+    await runOnce(pool, 10, async () => new TextEncoder().encode('not a dump'));
+
+    const { rows } = await pool.query('select status, video_score, audio_mos, video_mos from dashboard_analysis where dump_id = $1', [dumpId]);
+    expect(rows[0].status).toBe('ok');
+    expect(rows[0].video_score).toBeLessThan(100);
+    expect(rows[0].audio_mos).toBeNull();
+    expect(rows[0].video_mos).toBeNull();
+  });
+
+  it('leaves MOS null when no dump is available', async () => {
+    const dumpId = await insertDumpWithFreezingVideo(pool);
+    await runOnce(pool, 10, async () => null);
+    const { rows } = await pool.query('select status, audio_mos from dashboard_analysis where dump_id = $1', [dumpId]);
+    expect(rows[0].status).toBe('ok');
+    expect(rows[0].audio_mos).toBeNull();
   });
 });

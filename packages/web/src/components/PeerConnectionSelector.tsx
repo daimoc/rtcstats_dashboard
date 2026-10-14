@@ -1,47 +1,54 @@
-import { useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import type { FeatureConnection } from '../lib/api.js';
+import styles from './PeerConnectionSelector.module.css';
 
 interface PeerConnectionSelectorProps {
+  /** Chartable connection ids from the dump (`PC_0`, ...), in dump order. */
+  connectionIds: string[];
+  /** Analysed connections, used only to enrich the labels. */
   connections: FeatureConnection[];
   selectedPid: string;
   onSelect: (pid: string) => void;
 }
 
-export function PeerConnectionSelector({ connections, selectedPid, onSelect }: PeerConnectionSelectorProps) {
+/**
+ * Chooses which peer connection the evidence charts show.
+ *
+ * The options are keyed by the dump's own connection id rather than the numeric
+ * `features_connection.id`, because that numeric id has no counterpart in the dump —
+ * keying on it left the selector unable to address any chart. `connection_identifier`
+ * is the column that holds the dump-side id, so it is what joins the two.
+ */
+export function PeerConnectionSelector({
+  connectionIds,
+  connections,
+  selectedPid,
+  onSelect
+}: PeerConnectionSelectorProps) {
   const handleChange = useCallback(
-    (e: React.ChangeEvent<HTMLSelectElement>) => {
-      onSelect(e.target.value);
-    },
-    [onSelect],
+    (e: React.ChangeEvent<HTMLSelectElement>) => onSelect(e.target.value),
+    [onSelect]
   );
 
-  if (connections.length === 0) {
-    return null;
-  }
+  if (connectionIds.length <= 1) return null;
 
   return (
-    <div className="peer-connection-selector">
-      <label htmlFor="peer-connection-select">Peer Connection:</label>
+    <div className={styles.wrap}>
+      <label className={styles.label} htmlFor="peer-connection-select">Peer connection</label>
       <select
         id="peer-connection-select"
+        className={styles.select}
         aria-label="Select peer connection"
         value={selectedPid}
         onChange={handleChange}
       >
-        {connections.map((conn) => {
-          const id = String(conn.id);
-          const label = conn.connectionIdentifier
-            ? `${conn.connectionIdentifier} (#${id})`
-            : `#${id}`;
-          const trackCount = conn.tracks?.length ?? 0;
+        {connectionIds.map((pcId) => {
+          const analysed = connections.find((c) => c.connectionIdentifier === pcId);
+          const trackCount = analysed?.tracks?.length ?? 0;
           const tracks = trackCount > 0
             ? ` (${trackCount} ${trackCount === 1 ? 'track' : 'tracks'})`
             : '';
-          return (
-            <option key={id} value={id}>
-              {label}{tracks}
-            </option>
-          );
+          return <option key={pcId} value={pcId}>{pcId}{tracks}</option>;
         })}
       </select>
     </div>

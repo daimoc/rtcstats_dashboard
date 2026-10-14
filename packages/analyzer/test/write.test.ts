@@ -73,11 +73,27 @@ describe('writeAnalysisResult / writeFailure', () => {
     expect(observations.rows).toHaveLength(0);
   });
 
+  it('writes the call MOS alongside the scores', async () => {
+    const result: AnalysisResult = {
+      status: 'ok',
+      scores: { connectivity: 100, audio: 100, video: 100, experience: 100 },
+      observations: []
+    };
+    await writeAnalysisResult(pool, dumpId, '1.0.0', result, { audio: 4.2, video: null });
+
+    const analysis = await pool.query('select audio_mos, video_mos from dashboard_analysis where dump_id = $1', [dumpId]);
+    expect(analysis.rows[0].audio_mos).toBeCloseTo(4.2, 5);
+    expect(analysis.rows[0].video_mos).toBeNull();
+  });
+
   it('records a terminal failure with null scores', async () => {
+    await pool.query('update dashboard_analysis set audio_mos = 4, video_mos = 4 where dump_id = $1', [dumpId]);
     await writeFailure(pool, dumpId, '1.0.0', 'TypeError: cannot read property of undefined');
     const analysis = await pool.query('select * from dashboard_analysis where dump_id = $1', [dumpId]);
     expect(analysis.rows[0].status).toBe('failed');
     expect(analysis.rows[0].error).toContain('TypeError');
     expect(analysis.rows[0].experience_score).toBeNull();
+    expect(analysis.rows[0].audio_mos).toBeNull();
+    expect(analysis.rows[0].video_mos).toBeNull();
   });
 });

@@ -105,6 +105,55 @@ cd packages/web
 npx playwright test
 ```
 
+## Single-container deployment (external Postgres + MinIO)
+
+The root `Dockerfile` builds one image containing the web UI (nginx), the API and the
+analyzer. Postgres and S3/MinIO are **not** included: point the container at existing
+services with environment variables.
+
+```bash
+docker build -t rtcstats-dashboard .
+
+docker run -d -p 8080:80 --restart unless-stopped \
+  -e DATABASE_URL=postgresql://user:pw@db-host:5432/rtcstats \
+  -e SESSION_SECRET=$(openssl rand -hex 32) \
+  -e PASSWORD_HASH=<from `PASSWORD=... node scripts/ops.mjs create-user`> \
+  -e S3_ENDPOINT=https://minio.example.com \
+  -e S3_ACCESS_KEY_ID=... -e S3_SECRET_ACCESS_KEY=... \
+  -e S3_BUCKET=rtcstats-dumps \
+  rtcstats-dashboard
+```
+
+The UI is served on port 80 and proxies `/api/` to the API on `127.0.0.1:3000`; only port 80
+needs publishing.
+
+On startup the entrypoint runs `s/cripts/ops.mjs init` — applies `migrations/*.sql`, creates the
+`dashboard_reader` / `dashboard_writer` roles and grants, and creates the S3 bucket if missing.
+It is idempotent, so restarts are safe. Set `RUN_INIT=false` to skip it and initialize by hand.
+
+`DATABASE_URL` must point at an **existing rtcstats database**: `dashboard_analysis` has a
+foreign key to `"rtcstats-server"`, so init fails fast against an empty database. Grants on
+upstream tables that are missing are logged as warnings rather than treated as fatal.
+
+If any of the three processes exits, the container exits so the restart policy takes over.
+`HEALTHCHECK` polls `/api/health`.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `BASE_PATH` | `/` | Base path for the UI and API routes |
+| `DATABASE_URL` | *(required)* | External Postgres connection string |
+| `SESSION_SECRET` | `change-me-in-production` | Signs the session cookie |
+| `PASSWORD_HASH` | *(empty)* | Admin password hash; without it nobody can log in |
+| `S3_ENDPOINT` | *(unset)* | External MinIO/S3 endpoint; dump download is disabled if unset |
+| `S3_REGION` | `us-east-1` | S3 region |
+| `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | *(unset)* | S3 credentials |
+| `S3_BUCKET` | *(unset)* | Bucket holding the dumps |
+| `PORT` | `3000` | Internal API port behind nginx |
+| `ANALYZER_POLL_INTERVAL_MS` | `10000` | Analyzer poll interval |
+| `ANALYZER_BATCH_SIZE` | `100` | Dumps claimed per poll |
+| `ANALYZER_MOS_MAX_DUMP_BYTES` | `26214400` | Compressed dumps larger than this are not scored for MOS |
+| `RUN_INIT` | `true` | Run migrations/roles/bucket setup at startup |
+
 ## Project structure
 
 ```
@@ -112,10 +161,16 @@ rtcstats_dashboard/
   package.json                      # npm workspaces root
   tsconfig.base.json
   vitest.workspace.ts
-  docker-compose.yml                # Production stack (Postgres + MinIO + API + analyzer)
+  Dockerfile                        # All-in-one image (web + API + analyzer), external pg/minio
+  docker/
+    nginx.conf                      # Serves the UI, proxies /api to the local API
+    entrypoint.sh                   # Runs init, then nginx + API + analyzer
+  docker-compose.yml                # Local stack (Postgres + MinIO + API + analyzer)
   docker-compose.test.yml           # Test stack only (Postgres + MinIO)
   migrations/
     0001_dashboard_tables.sql       # dashboard_analysis, dashboard_observations, grants
+    0002_session_search_index.sql   # Trigram indexes for the call-list search
+    0003_call_mos.sql               # audio_mos / video_mos columns
   scripts/
     migrate.mjs                     # Applies migrations/*.sql
     create-roles.mjs                # Creates dashboard_reader / dashboard_writer roles
@@ -124,6 +179,7 @@ rtcstats_dashboard/
     fixtures/000_base_schema.sql    # Condensed upstream schema, TEST DB ONLY
   packages/
     rules/                          # Pure diagnostics library
+    mos/                            # Audio/video MOS models, shared by analyzer and web
     analyzer/                       # Worker: claim, load, analyze, write
     api/                            # Fastify API: auth, sessions, dump proxy
     web/                            # React + Vite frontend
@@ -138,6 +194,7 @@ One row per dump, replaced on re-analysis. Contains:
 
 - `status`: `ok` | `failed` | `insufficient_data`
 - `experience_score`, `audio_score`, `video_score`, `connectivity_score` (0–100)
+- `audio_mos`, `video_mos` (1–5): received call quality, see [Call quality (MOS)](#call-quality-mos)
 - `worst_severity`, `observations_count`, `observation_types`
 - `rules_version`: hand-bumped semver, stamped on every analysis row
 
@@ -182,7 +239,7 @@ DATABASE_URL=... node packages/analyzer/dist/cli.js --dump-id 42 --force
 
 ### Session list filters
 
-Query parameters: `from`, `to`, `user`, `conference`, `types` (comma-separated), `severity`, `maxScore`, `sort` (`date` or `score`), `cursor`, `limit` (default 25, max 100).
+Query parameters: `from`, `to`, `user`, `conference`, `types` (comma-separated), `severity`, `maxScore`, `maxMos` (calls whose worse MOS is at or below the value), `sort` (`date` or `score`), `cursor`, `limit` (default 25, max 100).
 
 ## Rules
 
@@ -198,17 +255,57 @@ Query parameters: `from`, `to`, `user`, `conference`, `types` (comma-separated),
 
 Scoring: each category starts at 100. Each observation subtracts `severityWeight(severity) * thresholds.weights[type]`, clamped to `[0, 100]`. `experience` is the mean of applicable category scores, reduced by device/api weights, clamped to `[0, 100]`.
 
+## Call quality (MOS)
+
+Besides the rule-based 0–100 scores, every call gets an estimated mean opinion score
+(1–5) for the audio and the video it **received**. The rule scores come from the
+aggregate `features_*` tables. Those tables carry no packet loss, jitter, bitrate or
+frame rate, so MOS is computed from the raw dump's `getStats` time series instead,
+by the `packages/mos` library:
+
+- **Audio:** ITU-T G.107 E-model. The delay is RTT/2 plus the measured jitter buffer
+  delay (falling back to 2 × jitter) plus the Opus algorithmic delay. Loss uses
+  `Ie = 0`, `Bpl = 25.1`. G.113 has no Opus entry, so these values are borrowed from
+  G.711 with PLC.
+- **Video:** ITU-T P.1203.1 mode 0, computed from the received bitrate, the decoded
+  frame rate and the resolution. Two adjustments are not part of the standard:
+  - VP9, H.265 and AV1 bitrates are scaled up by a codec-efficiency heuristic.
+  - Frozen time pulls the score towards 1. An interval where packets arrive but no
+    frame decodes scores 1.
+
+Each `getStats` interval is scored. Simultaneous streams of the same kind are
+averaged, and the call value is the time-weighted mean over the whole call.
+
+- **Analyzer:** downloads each dump from S3 and stores `audio_mos` / `video_mos`.
+  MOS is best effort: if there is no S3 configured, the dump is missing or too large
+  (`ANALYZER_MOS_MAX_DUMP_BYTES`), or the dump is corrupt, the columns stay null and
+  the analysis still succeeds.
+- **Call list:** shows both scores and can filter on them.
+- **Detail page:** shows them in the header and plots MOS over time per peer
+  connection in the Evidence charts. The browser computes that chart with the same
+  library.
+
+MOS bands follow G.107 user satisfaction: ≥ 4.0 good, 3.1–4.0 fair, < 3.1 poor. These
+are objective estimates for comparing calls with each other, not a listening test.
+
 ## Environment variables
 
-| Variable | Description |
-|----------|-------------|
-| `DATABASE_URL` | Postgres connection string |
-| `SESSION_SECRET` | HMAC secret for session tokens |
-| `PASSWORD_HASH` | Scrypt hash of admin password |
-| `S3_ENDPOINT` | S3/MinIO endpoint URL |
-| `S3_BUCKET` | S3 bucket name for dumps |
-| `ANALYZER_POLL_INTERVAL_MS` | Analyzer poll interval (default: 10000) |
-| `ANALYZER_BATCH_SIZE` | Analyzer batch size (default: 100) |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | *(required)* | Postgres connection string |
+| `SESSION_SECRET` | `change-me-in-production` | HMAC secret for session cookies |
+| `PASSWORD_HASH` | *(empty)* | Scrypt hash of admin password |
+| `S3_ENDPOINT` | *(unset)* | S3/MinIO endpoint URL; disables dump download if unset |
+| `S3_REGION` | `us-east-1` | S3 region |
+| `S3_ACCESS_KEY_ID` | *(unset)* | S3 access key ID |
+| `S3_SECRET_ACCESS_KEY` | *(unset)* | S3 secret access key |
+| `S3_BUCKET` | *(unset)* | S3 bucket name for dumps |
+| `BASE_PATH` | `/` | Base path for the UI and API routes |
+| `PORT` | `3000` | Internal API port behind nginx |
+| `ANALYZER_POLL_INTERVAL_MS` | `10000` | Analyzer poll interval in milliseconds |
+| `ANALYZER_BATCH_SIZE` | `100` | Analyzer batch size (dumps claimed per poll) |
+| `ANALYZER_MOS_MAX_DUMP_BYTES` | `26214400` (25 MB) | Compressed dump size above which the analyzer skips MOS (left null) |
+| `RUN_INIT` | `true` | Run migrations/roles/bucket setup at startup |
 
 ## License
 

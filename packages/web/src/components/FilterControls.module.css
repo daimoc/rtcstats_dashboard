@@ -1,0 +1,179 @@
+/* Shared by SearchBar, DateRangePicker and FilterBar — they render one toolbar. */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.toolbarRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.grow {
+  flex: 1;
+  min-width: 220px;
+}
+
+/* --- Search --- */
+
+.search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 0.65rem;
+  display: grid;
+  place-items: center;
+  color: var(--text-faint);
+  pointer-events: none;
+}
+
+.searchInput {
+  width: 100%;
+  height: 36px;
+  padding: 0 2.25rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.searchInput::placeholder {
+  color: var(--text-faint);
+}
+
+.searchInput:focus {
+  outline: none;
+  background: var(--surface);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.clear {
+  position: absolute;
+  right: 0.4rem;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-faint);
+}
+
+.clear:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+/* --- Chips / segmented controls --- */
+
+.segment {
+  display: inline-flex;
+  flex-wrap: wrap;
+  padding: 2px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.chip {
+  height: 30px;
+  padding: 0 0.7rem;
+  background: transparent;
+  border: 0;
+  border-radius: calc(var(--radius-sm) - 1px);
+  color: var(--text-muted);
+  white-space: nowrap;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.chip:hover {
+  color: var(--text);
+}
+
+.chipActive {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.select,
+.dateInput {
+  min-width: 0;
+  max-width: 100%;
+  height: 34px;
+  padding: 0 0.5rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+}
+
+.select:focus,
+.dateInput:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.customRange {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sep {
+  color: var(--text-faint);
+}
+
+@media (max-width: 640px) {
+  .toolbar {
+    gap: 0.5rem;
+  }
+
+  .toolbarRow {
+    width: 100%;
+  }
+
+  .segment,
+  .customRange,
+  .select {
+    width: 100%;
+  }
+
+  .segment {
+    justify-content: space-between;
+  }
+
+  .chip {
+    flex: 1;
+    min-width: max-content;
+  }
+}

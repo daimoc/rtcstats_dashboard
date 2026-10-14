@@ -1,0 +1,216 @@
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.9rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.back:hover {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.75rem;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.identity {
+  flex: 1;
+  min-width: min(260px, 100%);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.6rem;
+}
+
+.title {
+  font-size: 1.4rem;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.metaItem {
+  display: inline-flex;
+  gap: 0.35rem;
+}
+
+.metaKey {
+  color: var(--text-faint);
+}
+
+.mosRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.subScores {
+  display: grid;
+  /* `min(150px, 100%)` keeps the track minimum shrinkable: a bare 150px makes
+     the grid's intrinsic width 3 tracks wide and overflows a narrow parent. */
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+  gap: 0.75rem;
+  max-width: 34rem;
+}
+
+.subScore {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.subScoreHead {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+}
+
+.subScoreLabel {
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.subScoreValue {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.meter {
+  height: 5px;
+  background: var(--surface-2);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.meterFill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: currentColor;
+}
+
+.aside {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.5rem;
+  align-content: start;
+  min-width: min(200px, 100%);
+  overflow-wrap: anywhere;
+  padding-left: 1.25rem;
+  border-left: 1px solid var(--border);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.download {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  justify-self: start;
+  height: 32px;
+  padding: 0 0.75rem;
+  background: var(--accent);
+  border-radius: var(--radius-sm);
+  color: var(--accent-contrast);
+  font-weight: 500;
+}
+
+.download:hover {
+  background: var(--accent-hover);
+  color: var(--accent-contrast);
+  text-decoration: none;
+}
+
+.banner {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.7rem 0.9rem;
+  margin-bottom: 1rem;
+  background: var(--warning-soft);
+  border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
+  border-radius: var(--radius-sm);
+  color: var(--warning);
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 900px) {
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .aside {
+    padding-left: 0;
+    border-left: 0;
+  }
+}
+
+.panel {
+  padding: 1rem 1.15rem;
+}
+
+.panelTitle {
+  margin-bottom: 0.75rem;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+.evidenceHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.highlight {
+  animation: pulse 1.4s ease;
+}
+
+@keyframes pulse {
+  0%, 100% { box-shadow: var(--shadow-sm); }
+  25% { box-shadow: 0 0 0 3px var(--accent-soft); }
+}
+
+.state {
+  display: grid;
+  justify-items: center;
+  gap: 0.4rem;
+  padding: 4rem 1rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.stateError {
+  color: var(--critical);
+}

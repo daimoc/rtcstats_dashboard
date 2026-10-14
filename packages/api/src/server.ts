@@ -1,7 +1,7 @@
 import pg from 'pg';
-import { createPool } from './src/db.js';
-import { buildApp } from './src/app.js';
-import { createS3Client } from './src/s3.js';
+import { createPool } from './db.js';
+import { buildApp } from './app.js';
+import { createS3Client } from './s3.js';
 
 async function main() {
   const databaseUrl = process.env.DATABASE_URL;
@@ -26,13 +26,17 @@ async function main() {
       }
     : undefined;
 
+  const basePath = (process.env.BASE_PATH ?? '/').replace(/\/$/, '') || '/';
+  const apiPrefix = basePath === '/' ? '/api' : `${basePath}/api`;
+
   const app = buildApp({
     pool,
     config: {
       passwordHash: process.env.PASSWORD_HASH ?? '',
       sessionSecret: process.env.SESSION_SECRET ?? 'change-me-in-production'
     },
-    s3
+    s3,
+    apiPrefix
   });
 
   const port = Number(process.env.PORT ?? 3000);

@@ -8,11 +8,14 @@ import { requireAuth } from '../auth.js';
 export interface SessionFilters {
   from?: string;
   to?: string;
+  q?: string;
   user?: string;
   conference?: string;
   types?: string[];
   severity?: string;
   maxScore?: number;
+  /** Calls whose audio or video MOS is at or below this value. */
+  maxMos?: number;
   sort: 'date' | 'score';
   cursor?: string;
   limit: number;
@@ -28,6 +31,8 @@ export interface SessionSummary {
   audioScore: number | null;
   videoScore: number | null;
   connectivityScore: number | null;
+  audioMos: number | null;
+  videoMos: number | null;
   worstSeverity: string | null;
   observationsCount: Record<string, number>;
   topObservationTypes: string[];
@@ -73,6 +78,7 @@ function toSummary(row: {
   dump_id: number; session_start: string | null; duration: number | null;
   rtcstats_user: string | null; rtcstats_conference: string | null;
   experience_score: number | null; audio_score: number | null; video_score: number | null; connectivity_score: number | null;
+  audio_mos: number | null; video_mos: number | null;
   worst_severity: string | null; observations_count: Record<string, number>; observation_types: string[];
 }): SessionSummary {
   return {
@@ -85,10 +91,20 @@ function toSummary(row: {
     audioScore: row.audio_score,
     videoScore: row.video_score,
     connectivityScore: row.connectivity_score,
+    audioMos: row.audio_mos,
+    videoMos: row.video_mos,
     worstSeverity: row.worst_severity,
     observationsCount: row.observations_count,
     topObservationTypes: (row.observation_types ?? []).slice(0, 3)
   };
+}
+
+/**
+ * Escape the characters ILIKE treats as wildcards so a user searching for "%"
+ * or "a_i" matches those characters literally rather than everything.
+ */
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
 }
 
 export async function listSessions(pool: pg.Pool, filters: SessionFilters): Promise<SessionListResult> {
@@ -103,10 +119,18 @@ export async function listSessions(pool: pg.Pool, filters: SessionFilters): Prom
 
   if (filters.from) conditions.push(`session_start >= ${push(filters.from)}::timestamptz`);
   if (filters.to) conditions.push(`session_start < ${push(filters.to)}::timestamptz`);
+  if (filters.q) {
+    const pattern = `%${escapeLike(filters.q)}%`;
+    conditions.push(
+      `(rtcstats_user ilike ${push(pattern)} or rtcstats_conference ilike ${push(pattern)})`
+    );
+  }
   if (filters.user) conditions.push(`rtcstats_user = ${push(filters.user)}`);
   if (filters.conference) conditions.push(`rtcstats_conference = ${push(filters.conference)}`);
   if (filters.severity) conditions.push(`worst_severity = ${push(filters.severity)}`);
   if (filters.maxScore != null) conditions.push(`experience_score <= ${push(filters.maxScore)}`);
+  // least() skips nulls, so a call with only audio is judged on its audio alone.
+  if (filters.maxMos != null) conditions.push(`least(audio_mos, video_mos) <= ${push(filters.maxMos)}`);
   if (filters.types && filters.types.length > 0) conditions.push(`observation_types && ${push(filters.types)}::text[]`);
 
   const sortByScore = filters.sort === 'score';
@@ -124,7 +148,7 @@ export async function listSessions(pool: pg.Pool, filters: SessionFilters): Prom
 
   const { rows } = await pool.query(
     `select dump_id, session_start, duration, rtcstats_user, rtcstats_conference,
-            experience_score, audio_score, video_score, connectivity_score,
+            experience_score, audio_score, video_score, connectivity_score, audio_mos, video_mos,
             worst_severity, observations_count, observation_types
      from dashboard_analysis
      ${whereClause}
@@ -148,24 +172,26 @@ export async function listSessions(pool: pg.Pool, filters: SessionFilters): Prom
   return { items, nextCursor };
 }
 
-export function registerSessionsRoute(app: FastifyInstance, pool: pg.Pool, sessionSecret: string): void {
+export function registerSessionsRoute(app: FastifyInstance, pool: pg.Pool, sessionSecret: string, prefix: string): void {
   app.get<{
     Querystring: {
-      from?: string; to?: string; user?: string; conference?: string;
-      types?: string; severity?: string; maxScore?: string; sort?: string;
+      from?: string; to?: string; q?: string; user?: string; conference?: string;
+      types?: string; severity?: string; maxScore?: string; maxMos?: string; sort?: string;
       cursor?: string; limit?: string;
     };
-  }>('/api/sessions', { preHandler: requireAuth(sessionSecret) }, async (request, reply) => {
+  }>(prefix + '/sessions', { preHandler: requireAuth(sessionSecret) }, async (request, reply) => {
     const q = request.query;
     const limit = Math.min(Number(q.limit ?? 25), 100);
     const filters: SessionFilters = {
       from: q.from,
       to: q.to,
+      q: q.q || undefined,
       user: q.user,
       conference: q.conference,
       types: q.types ? q.types.split(',') : undefined,
       severity: q.severity,
       maxScore: q.maxScore != null ? Number(q.maxScore) : undefined,
+      maxMos: q.maxMos != null && q.maxMos !== '' && Number.isFinite(Number(q.maxMos)) ? Number(q.maxMos) : undefined,
       sort: q.sort === 'score' ? 'score' : 'date',
       cursor: q.cursor,
       limit
@@ -181,10 +207,11 @@ export function registerSessionDetailRoute(
   app: FastifyInstance,
   pool: pg.Pool,
   s3: { client: S3Client; bucket: string } | undefined,
-  sessionSecret: string
+  sessionSecret: string,
+  prefix: string
 ): void {
   app.get<{ Params: { dumpId: string } }>(
-    '/api/sessions/:dumpId',
+    prefix + '/sessions/:dumpId',
     { preHandler: requireAuth(sessionSecret) },
     async (request, reply) => {
       const dumpId = Number(request.params.dumpId);
@@ -192,7 +219,7 @@ export function registerSessionDetailRoute(
       const analysisResult = await pool.query(
         `select id, dump_id, rules_version, status, error, session_start, duration,
                 rtcstats_user, rtcstats_conference, experience_score, audio_score, video_score,
-                connectivity_score, worst_severity, observations_count, observation_types
+                connectivity_score, audio_mos, video_mos, worst_severity, observations_count, observation_types
          from dashboard_analysis where dump_id = $1`,
         [dumpId]
       );
@@ -245,6 +272,8 @@ export function registerSessionDetailRoute(
           audioScore: a.audio_score,
           videoScore: a.video_score,
           connectivityScore: a.connectivity_score,
+          audioMos: a.audio_mos,
+          videoMos: a.video_mos,
           worstSeverity: a.worst_severity,
           observationsCount: a.observations_count
         },
@@ -260,9 +289,10 @@ export function registerDumpProxyRoute(
   app: FastifyInstance,
   pool: pg.Pool,
   s3: { client: S3Client; bucket: string } | undefined,
-  sessionSecret: string
+  sessionSecret: string,
+  prefix: string
 ): void {
-  app.get<{ Params: { dumpId: string } }>('/api/sessions/:dumpId/dump', { preHandler: requireAuth(sessionSecret) }, async (request, reply) => {
+  app.get<{ Params: { dumpId: string } }>(prefix + '/sessions/:dumpId/dump', { preHandler: requireAuth(sessionSecret) }, async (request, reply) => {
     if (!s3) {
       reply.code(501).send({ error: 's3_not_configured' });
       return;

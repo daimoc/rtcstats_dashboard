@@ -1,0 +1,99 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 3.25rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+}
+
+.badgeLabel {
+  font-weight: 500;
+  font-size: 0.78em;
+  opacity: 0.85;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.critical {
+  background: var(--critical-soft);
+  border-color: color-mix(in srgb, var(--critical) 30%, transparent);
+  color: var(--critical);
+}
+
+.warning {
+  background: var(--warning-soft);
+  border-color: color-mix(in srgb, var(--warning) 30%, transparent);
+  color: var(--warning);
+}
+
+.ok {
+  background: var(--ok-soft);
+  border-color: color-mix(in srgb, var(--ok) 30%, transparent);
+  color: var(--ok);
+}
+
+.unknown {
+  background: var(--neutral-soft);
+  border-color: var(--border);
+  color: var(--text-faint);
+}
+
+/* --- Ring, used on the detail header --- */
+
+.ring {
+  display: grid;
+  place-items: center;
+  position: relative;
+  width: 116px;
+  height: 116px;
+  flex: none;
+}
+
+.ringSvg {
+  transform: rotate(-90deg);
+}
+
+.ringTrack {
+  stroke: var(--border);
+}
+
+.ringValue {
+  transition: stroke-dashoffset 0.5s ease;
+}
+
+.ringCritical { color: var(--critical); }
+.ringWarning { color: var(--warning); }
+.ringOk { color: var(--ok); }
+.ringUnknown { color: var(--text-faint); }
+
+.ringLabel {
+  position: absolute;
+  display: grid;
+  justify-items: center;
+  gap: 0.1rem;
+}
+
+.ringScore {
+  font-size: 1.9rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.ringCaption {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}

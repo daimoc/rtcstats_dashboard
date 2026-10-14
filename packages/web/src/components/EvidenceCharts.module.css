@@ -1,0 +1,49 @@
+.wrap {
+  display: grid;
+  gap: 1rem;
+  width: 100%;
+}
+
+.figure {
+  margin: 0;
+  padding: 0.5rem 0.5rem 0.25rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.chartTitle {
+  margin-bottom: 0.35rem;
+  padding-left: 0.25rem;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+
+.chart {
+  width: 100%;
+  /* uPlot sizes the canvas itself; this only reserves space before it mounts. */
+  min-height: 220px;
+}
+
+.empty {
+  padding: 2.5rem 1rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* uPlot ships its own class names; pull them onto the token palette. */
+.chart :global(.u-legend) {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.chart :global(.u-legend .u-marker) {
+  border-color: currentColor;
+}
+
+.chart :global(.u-axis) {
+  color: var(--text-faint);
+}

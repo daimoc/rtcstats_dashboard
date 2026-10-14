@@ -1,0 +1,143 @@
+/*
+ * Design tokens. Dark is the default; light is applied either by the OS
+ * preference or by an explicit data-theme on <html>, so the in-app toggle wins
+ * in both directions. Every token has its base value on bare :root — none is
+ * defined only inside a media query.
+ */
+:root {
+  color-scheme: dark;
+
+  --bg: #0b0e13;
+  --surface: #131820;
+  --surface-2: #1a212b;
+  --surface-hover: #1f2732;
+  --border: #262f3d;
+  --border-strong: #35404f;
+
+  --text: #e7ecf3;
+  --text-muted: #9aa7b8;
+  --text-faint: #6b7787;
+
+  --accent: #4f8cff;
+  --accent-hover: #6b9dff;
+  --accent-soft: rgba(79, 140, 255, 0.14);
+  --accent-contrast: #06101f;
+
+  --critical: #ff6b6b;
+  --critical-soft: rgba(255, 107, 107, 0.14);
+  --warning: #ffb547;
+  --warning-soft: rgba(255, 181, 71, 0.14);
+  --ok: #3ddc84;
+  --ok-soft: rgba(61, 220, 132, 0.14);
+  --info: #63b3ed;
+  --info-soft: rgba(99, 179, 237, 0.14);
+  --neutral-soft: rgba(154, 167, 184, 0.12);
+
+  /*
+   * Categorical chart series, deliberately distinct from the status colours above:
+   * a red or amber line in a dashboard whose language is severity reads as a fault
+   * rather than as a data series, so charts never borrow --critical/--warning.
+   *
+   * Validated across ALL pairs (not just adjacent) for the lightness band, chroma
+   * floor, CVD separation and contrast against --surface-2. The one pair that only
+   * reaches the 6-8 CVD floor band in dark mode is yellow/green, so those two slots
+   * are assigned to entities that never share a chart. Slot order is meaningful:
+   * see SLOT in lib/dumpSeries.ts.
+   */
+  --series-1: #3987e5; /* outbound */
+  --series-2: #c98500; /* connection-level */
+  --series-3: #d55181; /* inbound video */
+  --series-4: #008300; /* inbound audio */
+
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  --header-height: 56px;
+  --content-max: 1400px;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+
+    --bg: #f5f7fa;
+    --surface: #ffffff;
+    --surface-2: #f0f3f7;
+    --surface-hover: #eaeef4;
+    --border: #dde3ec;
+    --border-strong: #c3ccd9;
+
+    --text: #131820;
+    --text-muted: #5a6779;
+    --text-faint: #8794a5;
+
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --accent-soft: rgba(37, 99, 235, 0.1);
+    --accent-contrast: #ffffff;
+
+    --critical: #d92d20;
+    --critical-soft: rgba(217, 45, 32, 0.1);
+    --warning: #b54708;
+    --warning-soft: rgba(181, 71, 8, 0.1);
+    --ok: #067647;
+    --ok-soft: rgba(6, 118, 71, 0.1);
+    --info: #175cd3;
+    --info-soft: rgba(23, 92, 211, 0.1);
+    --neutral-soft: rgba(90, 103, 121, 0.1);
+
+    --series-1: #2a78d6;
+    --series-2: #eda100;
+    --series-3: #e87ba4;
+    --series-4: #008300;
+
+    --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+    --shadow: 0 8px 24px rgba(16, 24, 40, 0.1);
+  }
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #f5f7fa;
+  --surface: #ffffff;
+  --surface-2: #f0f3f7;
+  --surface-hover: #eaeef4;
+  --border: #dde3ec;
+  --border-strong: #c3ccd9;
+
+  --text: #131820;
+  --text-muted: #5a6779;
+  --text-faint: #8794a5;
+
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-soft: rgba(37, 99, 235, 0.1);
+  --accent-contrast: #ffffff;
+
+  --critical: #d92d20;
+  --critical-soft: rgba(217, 45, 32, 0.1);
+  --warning: #b54708;
+  --warning-soft: rgba(181, 71, 8, 0.1);
+  --ok: #067647;
+  --ok-soft: rgba(6, 118, 71, 0.1);
+  --info: #175cd3;
+  --info-soft: rgba(23, 92, 211, 0.1);
+  --neutral-soft: rgba(90, 103, 121, 0.1);
+
+  --series-1: #2a78d6;
+  --series-2: #eda100;
+  --series-3: #e87ba4;
+  --series-4: #008300;
+
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow: 0 8px 24px rgba(16, 24, 40, 0.1);
+}

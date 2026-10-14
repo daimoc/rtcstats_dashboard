@@ -1,0 +1,2 @@
+#/bin/bash
+docker run -p 9080:80  -e DATABASE_URL=postgresql://postgres:rtcstatspass@172.17.0.1:5432/rtcstats  -e SESSION_SECRET=demo-secret   -e PASSWORD_HASH=1d88c1d8cba7fb828501bc0fc97c72be:c77eb6825bf900aae721fed3ea66c61647efc55d11bffd0e3e142700579d921609c1b2970f54106c4ebfc50e3b8ffda22f50a80848022498683701f586ad5776   -e S3_ENDPOINT=http://172.17.0.1:9000   -e S3_ACCESS_KEY_ID=minioadmin    -e S3_SECRET_ACCESS_KEY=minioadmin   -e S3_BUCKET=rdvtest  rtcstats-dashboard

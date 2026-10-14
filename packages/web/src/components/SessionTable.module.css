@@ -1,0 +1,176 @@
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.scroll {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 780px;
+}
+
+/* Not sticky: `overflow-x: auto` on .scroll makes that element the containing
+   block for sticky children, so a top offset here would push the header down
+   over the first row rather than pinning it to the viewport. */
+.table thead th {
+  padding: 0.6rem 0.9rem;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-faint);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.table tbody td {
+  padding: 0.65rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.row {
+  cursor: pointer;
+  transition: background 0.1s ease;
+  /* Keep a row clear of the sticky app header and column header when it is
+     scrolled to by keyboard focus. */
+  scroll-margin-top: calc(var(--header-height) + 3rem);
+}
+
+.row:hover {
+  background: var(--surface-hover);
+}
+
+.row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.started {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.relative {
+  display: block;
+  color: var(--text-faint);
+  font-size: 0.78rem;
+}
+
+.duration {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.name {
+  font-weight: 500;
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.name a {
+  color: var(--text);
+}
+
+.name a:hover {
+  color: var(--accent);
+}
+
+.muted {
+  color: var(--text-muted);
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.faint {
+  color: var(--text-faint);
+}
+
+.issues {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.issueChip {
+  padding: 0.1rem 0.5rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.issueChip:hover {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--accent);
+}
+
+.more {
+  color: var(--text-faint);
+  font-size: 0.75rem;
+  align-self: center;
+}
+
+/* --- Non-table states --- */
+
+.state {
+  display: grid;
+  justify-items: center;
+  gap: 0.4rem;
+  padding: 3.5rem 1rem;
+  text-align: center;
+}
+
+.stateTitle {
+  font-weight: 600;
+}
+
+.stateBody {
+  color: var(--text-muted);
+  max-width: 30rem;
+}
+
+.stateError .stateTitle {
+  color: var(--critical);
+}
+
+.skeleton {
+  height: 12px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, var(--surface-2), var(--surface-hover), var(--surface-2));
+  background-size: 200% 100%;
+  animation: shimmer 1.2s linear infinite;
+}
+
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+.mos {
+  display: flex;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
