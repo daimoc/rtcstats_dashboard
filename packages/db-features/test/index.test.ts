@@ -64,4 +64,24 @@ describe('loadFeatures', () => {
     expect(bundle!.client?.hardwareConcurrency).toBe(8);
     expect(bundle!.connections[0].tracks[0].kind).toBe('video');
   });
+
+  it('loads which session descriptions each connection applied', async () => {
+    const dump = await pool.query(`insert into "rtcstats-server" (rtcstats_user) values ('u1') returning id`);
+    const metadata = await pool.query(
+      `insert into features_metadata (dump_id, number_peerconnections) values ($1, 2) returning id`,
+      [dump.rows[0].id]
+    );
+    await pool.query(
+      `insert into features_connection (dump_id, connection_identifier, set_local_description_role, set_remote_description_role)
+       values ($1, 'PC_0', null, null), ($1, 'PC_1', 'offer', 'answer')`,
+      [metadata.rows[0].id]
+    );
+
+    const bundle = await loadFeatures(pool, dump.rows[0].id);
+    const byPc = Object.fromEntries(bundle!.connections.map((c) => [c.connectionIdentifier, c]));
+    expect(byPc.PC_0.setLocalDescriptionRole).toBeNull();
+    expect(byPc.PC_0.setRemoteDescriptionRole).toBeNull();
+    expect(byPc.PC_1.setLocalDescriptionRole).toBe('offer');
+    expect(byPc.PC_1.setRemoteDescriptionRole).toBe('answer');
+  });
 });

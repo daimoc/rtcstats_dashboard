@@ -51,6 +51,7 @@ function createTables(pool: pg.Pool) {
       average_stun_round_trip_time float,
       ice_restart_followed_by_set_remote_description boolean default false,
       signaling_delay integer, set_remote_description_delay integer, set_local_description_delay integer,
+        set_local_description_role text, set_remote_description_role text,
       clock_skew integer, gathering_time_turn_udp integer, gathering_time_turn_tcp integer, gathering_time_turn_tls integer
     );
     create table features_track (

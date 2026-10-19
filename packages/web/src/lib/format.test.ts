@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDateTime, formatDuration, formatRelative, formatBytes } from './format.js';
+import { formatDateTime, formatDuration, formatElapsed, formatRelative, formatBytes } from './format.js';
 
 describe('formatDuration', () => {
   it('renders a sub-hour duration as m:ss', () => {
@@ -61,5 +61,23 @@ describe('formatBytes', () => {
 
   it('renders an em dash for a missing value', () => {
     expect(formatBytes(null)).toBe('—');
+  });
+});
+
+describe('formatElapsed', () => {
+  it('keeps millisecond precision for short spans', () => {
+    expect(formatElapsed(0)).toBe('0 ms');
+    expect(formatElapsed(420.4)).toBe('420 ms');
+    expect(formatElapsed(4210)).toBe('4.2 s');
+  });
+
+  it('switches to m:ss from a minute', () => {
+    expect(formatElapsed(60_000)).toBe('1:00');
+    expect(formatElapsed(1_882_000)).toBe('31:22');
+  });
+
+  it('renders an em dash for a missing span', () => {
+    expect(formatElapsed(null)).toBe('—');
+    expect(formatElapsed(-5)).toBe('—');
   });
 });

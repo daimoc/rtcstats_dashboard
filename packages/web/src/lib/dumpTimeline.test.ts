@@ -81,3 +81,24 @@ describe('buildTimeline', () => {
     expect(buildTimeline({ peerConnections: {} })).toEqual([]);
   });
 });
+
+describe('buildTimeline for addTransceiver', () => {
+  const at = (type: string, value: unknown) => ({ timestamp: 1, type, value, extra: [] });
+
+  it('describes a transceiver that publishes a track like an added local track', () => {
+    const [event] = buildTimeline({
+      peerConnections: {
+        PC_1: [at('addTransceiver', [['video', 'a98c', 'Integrated Webcam'], { direction: 'sendonly' }])]
+      }
+    });
+    expect(event.label).toBe('Local video track added (sendonly)');
+    expect(event.details).toBe('Integrated Webcam');
+  });
+
+  it('describes a receive-only transceiver by its kind', () => {
+    const [event] = buildTimeline({
+      peerConnections: { PC_0: [at('addTransceiver', ['audio', { direction: 'recvonly' }])] }
+    });
+    expect(event.label).toBe('audio transceiver added (recvonly)');
+  });
+});

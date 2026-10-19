@@ -1,4 +1,5 @@
 import { readRTCStatsDump } from '@rtcstats/rtcstats-shared';
+import { buildConnectionReports, type ConnectionReport } from '../lib/connectionReport.js';
 import { buildConnectionSeries, type ConnectionSeries } from '../lib/dumpSeries.js';
 import { buildTimeline, type TimelineEvent } from '../lib/dumpTimeline.js';
 import type { DecodedDump } from '../lib/dumpTypes.js';
@@ -11,6 +12,8 @@ export interface ParsedDump {
   connections: Record<string, ConnectionSeries>;
   /** Chartable connection ids in dump order, for the peer-connection selector. */
   connectionIds: string[];
+  /** Lifecycle, tracks and devices of every peer connection, in dump order. */
+  reports: ConnectionReport[];
 }
 
 export interface ParseDumpRequest {
@@ -46,7 +49,7 @@ async function parse(compressed: Blob): Promise<ParsedDump> {
     connectionIds.push(pcId);
   }
 
-  return { timeline: buildTimeline(dump), connections, connectionIds };
+  return { timeline: buildTimeline(dump), connections, connectionIds, reports: buildConnectionReports(dump) };
 }
 
 function post(message: ParseDumpMessage): void {

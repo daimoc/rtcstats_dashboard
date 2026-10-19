@@ -72,6 +72,12 @@ export interface FeatureConnection {
   signalingDelay: number | null;
   setRemoteDescriptionDelay: number | null;
   setLocalDescriptionDelay: number | null;
+  /**
+   * Type (`offer`/`answer`) of the first session description applied on each side, or
+   * null when none ever was. Undefined when the features schema does not provide them.
+   */
+  setLocalDescriptionRole?: string | null;
+  setRemoteDescriptionRole?: string | null;
   clockSkew: number | null;
   gatheringTimeTurnUdp: number | null;
   gatheringTimeTurnTcp: number | null;

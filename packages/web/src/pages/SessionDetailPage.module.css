@@ -176,6 +176,10 @@
   padding: 1rem 1.15rem;
 }
 
+.connections {
+  margin-bottom: 1rem;
+}
+
 .panelTitle {
   margin-bottom: 0.75rem;
   font-size: 0.78rem;

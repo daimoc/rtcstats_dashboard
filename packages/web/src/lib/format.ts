@@ -61,3 +61,14 @@ export function formatBytes(bytes: number | null | undefined): string {
 
   return unit === 0 ? `${value} ${BYTE_UNITS[unit]}` : `${value.toFixed(1)} ${BYTE_UNITS[unit]}`;
 }
+
+/**
+ * A span of milliseconds at the precision it deserves: "420 ms" for set-up steps,
+ * "4.2 s" under a minute, then m:ss / h:mm:ss like `formatDuration`.
+ */
+export function formatElapsed(ms: number | null | undefined): string {
+  if (ms == null || !Number.isFinite(ms) || ms < 0) return EM_DASH;
+  if (ms < 1000) return `${Math.round(ms)} ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)} s`;
+  return formatDuration(ms / 1000);
+}

@@ -68,6 +68,8 @@ create table features_connection (
   signaling_delay integer,
   set_remote_description_delay integer,
   set_local_description_delay integer,
+  set_local_description_role text,
+  set_remote_description_role text,
   clock_skew integer,
   gathering_time_turn_udp integer,
   gathering_time_turn_tcp integer,

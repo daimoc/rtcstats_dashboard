@@ -46,6 +46,28 @@ describe('connectivity.never_connected', () => {
     expect(ruleById('connectivity.never_connected').evaluate(ctx)).toHaveLength(0);
   });
 
+  it('does not fire for a connection closed before any session description was applied', () => {
+    // LiveKit opens a throwaway connection, creates an offer it never applies, and closes
+    // it within milliseconds: it never tried to connect, so it cannot have failed to.
+    const ctx = ctxWith([baseConnection({
+      connected: false, iceConnected: false, setLocalDescriptionRole: null, setRemoteDescriptionRole: null
+    })]);
+    expect(ruleById('connectivity.never_connected').evaluate(ctx)).toHaveLength(0);
+  });
+
+  it('still fires when an offer was applied but the connection never came up', () => {
+    // Offer sent, answer never received: a real signaling/connectivity failure.
+    const ctx = ctxWith([baseConnection({
+      connected: false, setLocalDescriptionRole: 'offer', setRemoteDescriptionRole: null
+    })]);
+    expect(ruleById('connectivity.never_connected').evaluate(ctx)).toHaveLength(1);
+  });
+
+  it('keeps firing when the description roles were not extracted at all', () => {
+    const ctx = ctxWith([baseConnection({ connected: false, setLocalDescriptionRole: undefined })]);
+    expect(ruleById('connectivity.never_connected').evaluate(ctx)).toHaveLength(1);
+  });
+
   it('does not fire when connected is unknown (null)', () => {
     const ctx = ctxWith([baseConnection({ connected: null })]);
     expect(ruleById('connectivity.never_connected').evaluate(ctx)).toHaveLength(0);

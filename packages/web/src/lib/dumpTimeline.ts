@@ -121,6 +121,22 @@ function describe(event: TraceEvent, pcId: string): Omit<TimelineEvent, 'timesta
       };
     }
 
+    case 'addTransceiver': {
+      // [track, init]: the track is [kind, trackId, label] when one is attached (how
+      // LiveKit publishes), or a bare kind string for a receive-only transceiver.
+      const [trackOrKind, init] = Array.isArray(value) ? value : [];
+      const direction = asString((init as { direction?: unknown } | null)?.direction) ?? 'sendrecv';
+      if (Array.isArray(trackOrKind)) {
+        const track = trackFromValue(trackOrKind);
+        return {
+          ...base,
+          label: `Local ${track?.kind ?? 'unknown'} track added (${direction})`,
+          details: track?.label ?? undefined
+        };
+      }
+      return { ...base, label: `${asString(trackOrKind) ?? 'Media'} transceiver added (${direction})` };
+    }
+
     case 'removeTrack':
       return { ...base, label: 'Track removed' };
 

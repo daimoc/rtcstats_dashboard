@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { ConnectionTimelines } from '../components/ConnectionTimelines.js';
 import { EvidenceCharts } from '../components/EvidenceCharts.js';
 import { EventTimeline } from '../components/EventTimeline.js';
 import { PeerConnectionSelector } from '../components/PeerConnectionSelector.js';
@@ -98,6 +99,12 @@ export function SessionDetailPage() {
     setTimeout(() => setHighlighted(false), 1400);
   }
 
+  function showConnectionCharts(pcId: string) {
+    // Only connections with stats are chartable; the others keep the current selection.
+    if (dump.status === 'ready' && dump.result.connectionIds.includes(pcId)) setSelectedPid(pcId);
+    showEvidence();
+  }
+
   if (error) {
     return (
       <>
@@ -194,6 +201,11 @@ export function SessionDetailPage() {
           <EventTimeline dump={dump} />
         </section>
       </div>
+
+      <section className={`${styles.card} ${styles.panel} ${styles.connections}`}>
+        <h2 className={styles.panelTitle}>Peer connections</h2>
+        <ConnectionTimelines dump={dump} onShowCharts={showConnectionCharts} />
+      </section>
 
       <section
         ref={evidenceRef}

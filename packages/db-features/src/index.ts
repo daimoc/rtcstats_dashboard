@@ -61,6 +61,7 @@ export async function loadFeatures(pool: pg.Pool, dumpId: number): Promise<Featu
             first_candidate_pair_local_type, first_candidate_pair_remote_type,
             average_stun_round_trip_time, ice_restart_followed_by_set_remote_description,
             signaling_delay, set_remote_description_delay, set_local_description_delay,
+            set_local_description_role, set_remote_description_role,
             clock_skew, gathering_time_turn_udp, gathering_time_turn_tcp, gathering_time_turn_tls
      from features_connection where dump_id = $1`,
     [metadataId]
@@ -143,6 +144,8 @@ export async function loadFeatures(pool: pg.Pool, dumpId: number): Promise<Featu
     iceRestartFollowedBySetRemoteDescription: c.ice_restart_followed_by_set_remote_description,
     signalingDelay: c.signaling_delay,
     setRemoteDescriptionDelay: c.set_remote_description_delay,
+    setLocalDescriptionRole: c.set_local_description_role,
+    setRemoteDescriptionRole: c.set_remote_description_role,
     setLocalDescriptionDelay: c.set_local_description_delay,
     clockSkew: c.clock_skew,
     gatheringTimeTurnUdp: c.gathering_time_turn_udp,

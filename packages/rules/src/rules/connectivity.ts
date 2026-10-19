@@ -22,6 +22,10 @@ const neverConnected: Rule = {
   scope: 'connection',
   evaluate: (ctx) => forEachConnection(ctx, (c) => {
     if (c.connected !== false) return null;
+    // Closed before any session description was applied: the application discarded the
+    // connection (LiveKit opens one just to probe codec capabilities) rather than it
+    // failing to connect. An offer applied but never answered still counts as a failure.
+    if (c.setLocalDescriptionRole === null && c.setRemoteDescriptionRole === null) return null;
     return makeObservation('connectivity.never_connected', 'critical', c.connectionIdentifier, {});
   })
 };
